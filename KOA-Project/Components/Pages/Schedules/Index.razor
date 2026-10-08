@@ -1,0 +1,235 @@
+﻿@page "/schedules"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "schedules")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject AuthService AuthService
+
+<PageTitle>Schedules - Knights of the Altar</PageTitle>
+
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Schedules</h1>
+            <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage weekly mass schedules and assigned members.</p>
+        </div>
+        
+        <AuthorizeView Policy="schedules.create">
+            <Authorized>
+                <div class="flex space-x-3 self-start sm:self-auto">
+                    <a href="/schedules/check" class="bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center transition-colors shadow-sm">
+                        <i data-lucide="check-square" class="w-4 h-4 mr-2"></i> Check Schedule
+                    </a>
+                    <a href="/schedules/create" class="bg-[#246b9c] hover:bg-[#1a547b] text-white text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center transition-colors shadow-sm">
+                        <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Create Schedule
+                    </a>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i> @_successMessage
+        </div>
+    }
+
+    <div class="space-y-6">
+        @if (!_allWeeks.Any())
+        {
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-12 text-center">
+                <div class="bg-gray-50 dark:bg-slate-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="calendar" class="w-8 h-8 text-gray-400 dark:text-slate-500"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-1">No schedules found</h3>
+                
+                <AuthorizeView Policy="schedules.create">
+                    <Authorized>
+                        <p class="text-gray-500 dark:text-slate-400 text-sm mb-4">Get started by creating a new schedule for the upcoming week.</p>
+                        <a href="/schedules/create" class="inline-flex items-center text-sm font-medium text-[#246b9c] dark:text-blue-400 hover:underline">
+                            Create Schedule <i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>
+                        </a>
+                    </Authorized>
+                    <NotAuthorized>
+                        <p class="text-gray-500 dark:text-slate-400 text-sm">Please wait for the coordinator or secretary to create a schedule.</p>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        }
+        
+        @foreach (var week in _allWeeks)
+        {
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden transition-all">
+                <div class="bg-gray-50/70 dark:bg-slate-900/80 px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h3 class="font-bold text-gray-800 dark:text-white text-base">Week of @week.WeekStart.ToString("MMM dd, yyyy")</h3>
+                        <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                            @week.WeekdaySchedules.Count Weekday Masses, @week.SundaySchedules.Count Sunday Masses
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        @if (week.Status == "checked")
+                        {
+                            <span class="inline-flex items-center bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                                <i data-lucide="check-circle" class="w-3.5 h-3.5 mr-1 text-emerald-600 dark:text-emerald-400"></i> Checked
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="inline-flex items-center bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                                <i data-lucide="clock" class="w-3.5 h-3.5 mr-1 text-amber-600 dark:text-amber-400"></i> Not Checked
+                            </span>
+                        }
+                        <div class="inline-flex items-center space-x-2.5 pl-2 border-l border-gray-200 dark:border-slate-700">
+                            <a href="/schedules/view/@week.WeekStart.ToString("yyyy-MM-dd")" class="text-blue-500 hover:text-blue-700 p-1 transition-colors" title="View Schedule">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
+                            </a>
+                            <a href="/schedules/print/@week.WeekStart.ToString("yyyy-MM-dd")" target="_blank" class="text-purple-500 hover:text-purple-700 p-1 transition-colors" title="Print/Export Schedule">
+                                <i data-lucide="printer" class="w-4 h-4"></i>
+                            </a>
+                            <a href="/schedules/check/@week.WeekStart.ToString("yyyy-MM-dd")" class="text-emerald-600 hover:text-emerald-800 p-1 transition-colors" title="Check Schedule">
+                                <i data-lucide="check-square" class="w-4 h-4"></i>
+                            </a>
+                            <a href="/schedules/edit/@week.WeekStart.ToString("yyyy-MM-dd")" class="text-amber-500 hover:text-amber-700 p-1 transition-colors" title="Edit Schedule">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 space-y-6">
+                    <!-- Weekday Preview -->
+                    @if (week.WeekdaySchedules.Any())
+                    {
+                        <div>
+                            <h4 class="text-xs font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-3">Weekday Schedule</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                @foreach (var s in week.WeekdaySchedules.Take(3))
+                                {
+                                    <div class="border border-gray-200 dark:border-slate-700 rounded-xl p-3.5 bg-gray-50 dark:bg-slate-900 transition-colors">
+                                        <div class="font-bold text-sm text-gray-800 dark:text-white">@s.Day (@s.MassType)</div>
+                                        <div class="text-xs text-gray-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                                            <i data-lucide="clock" class="w-3 h-3 text-gray-400 dark:text-slate-500"></i> @s.MassTime.ToString("h:mm tt")
+                                        </div>
+                                        <div class="text-xs text-[#246b9c] dark:text-blue-400 mt-2 font-semibold flex items-center gap-1">
+                                            <i data-lucide="users" class="w-3 h-3"></i> @s.ScheduleMembers.Count members assigned
+                                        </div>
+                                    </div>
+                                }
+                                @if (week.WeekdaySchedules.Count > 3)
+                                {
+                                    <div class="border border-dashed border-gray-300 dark:border-slate-700 rounded-xl p-3.5 flex items-center justify-center text-gray-500 dark:text-slate-400 text-sm font-medium bg-gray-50/50 dark:bg-slate-900/50">
+                                        + @(week.WeekdaySchedules.Count - 3) more
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Sunday Preview -->
+                    @if (week.SundaySchedules.Any())
+                    {
+                        <div>
+                            <h4 class="text-xs font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-3">Sunday Schedule</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                @foreach (var s in week.SundaySchedules.Take(3))
+                                {
+                                    <div class="border border-amber-200 dark:border-amber-900/50 rounded-xl p-3.5 bg-amber-50/40 dark:bg-amber-950/30 transition-colors">
+                                        <div class="font-bold text-sm text-gray-800 dark:text-white">@s.MassName</div>
+                                        <div class="text-xs text-gray-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                                            <i data-lucide="sun" class="w-3 h-3 text-amber-500"></i> @s.MassDate.ToString("MMM dd") &bull; @s.MassTime.ToString("h:mm tt")
+                                        </div>
+                                        <div class="text-xs text-amber-600 dark:text-amber-400 mt-2 font-semibold flex items-center gap-1">
+                                            <i data-lucide="users" class="w-3 h-3"></i> @s.ScheduleMembers.Count members assigned
+                                        </div>
+                                    </div>
+                                }
+                                @if (week.SundaySchedules.Count > 3)
+                                {
+                                    <div class="border border-dashed border-amber-300 dark:border-amber-900/50 rounded-xl p-3.5 flex items-center justify-center text-amber-600 dark:text-amber-400 text-sm font-medium bg-amber-50/20 dark:bg-amber-950/20">
+                                        + @(week.SundaySchedules.Count - 3) more
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<WeekData> _allWeeks = new();
+    private string? _successMessage;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("success", out var sm))
+        {
+            _successMessage = sm;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        var weekdays = await db.ScheduleWeekdays
+            .Include(s => s.ScheduleMembers)
+            .OrderByDescending(s => s.WeekStart)
+            .ToListAsync();
+
+        var sundays = await db.ScheduleSundays
+            .Include(s => s.ScheduleMembers)
+            .OrderByDescending(s => s.MassDate)
+            .ToListAsync();
+
+        var weekStarts = weekdays.Select(w => w.WeekStart)
+            .Union(sundays.Select(s => s.MassDate.AddDays(-(int)s.MassDate.DayOfWeek - 1)))
+            .Distinct()
+            .OrderByDescending(d => d)
+            .ToList();
+
+        foreach (var start in weekStarts)
+        {
+            var end = start.AddDays(6);
+            var ws = weekdays.Where(w => w.WeekStart == start).ToList();
+            var ss = sundays.Where(s => s.MassDate >= start && s.MassDate <= end).ToList();
+
+            var wChecked = ws.All(w => w.Status == "checked") && ws.Any();
+            var sChecked = ss.All(s => s.Status == "checked") && ss.Any();
+            
+            var status = (wChecked || sChecked) && (ws.All(w => w.Status == "checked") && ss.All(s => s.Status == "checked")) 
+                ? "checked" 
+                : "not checked";
+
+            _allWeeks.Add(new WeekData
+            {
+                WeekStart = start,
+                Status = status,
+                WeekdaySchedules = ws,
+                SundaySchedules = ss
+            });
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+
+    public class WeekData
+    {
+        public DateOnly WeekStart { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public List<ScheduleWeekday> WeekdaySchedules { get; set; } = new();
+        public List<ScheduleSunday> SundaySchedules { get; set; } = new();
+    }
+}

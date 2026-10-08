@@ -1,0 +1,318 @@
+﻿@page "/attendance/check"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "attendance")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@using System.Security.Claims
+
+<PageTitle>Check Attendance - Knights of the Altar</PageTitle>
+
+<!-- html5-qrcode for camera scanning -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<div class="space-y-6 max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center">
+            <a href="/attendance" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 mr-3 transition-colors">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Check Attendance</h1>
+                <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Record member attendance for the upcoming Saturday meeting.</p>
+            </div>
+        </div>
+        <!-- Scan QR Button -->
+        <button @onclick="ToggleScanner" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-sm">
+            <i data-lucide="@(_scannerOpen ? "x" : "scan-line")" class="w-4 h-4"></i>
+            @(_scannerOpen ? "Close Scanner" : "Scan QR")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">@_errorMessage</div>
+    }
+
+    @if (!string.IsNullOrEmpty(_scanMessage))
+    {
+        <div class="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i> @_scanMessage
+        </div>
+    }
+
+    <!-- QR Scanner Panel -->
+    @if (_scannerOpen)
+    {
+        <div class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-bold text-gray-800 dark:text-white text-sm flex items-center gap-2">
+                    <i data-lucide="scan-line" class="w-4 h-4 text-emerald-500"></i>
+                    QR Scanner — Point camera at member's QR code
+                </h3>
+                <span class="text-xs text-gray-400 dark:text-slate-500">Auto-marks as <strong class="text-green-600">Present</strong></span>
+            </div>
+            <div id="qr-reader" class="w-full max-w-sm mx-auto rounded-xl overflow-hidden"></div>
+        </div>
+    }
+
+    <!-- Date Card -->
+    <div class="bg-[#246b9c] rounded-xl text-white p-6 shadow-sm flex items-center justify-between">
+        <div>
+            <p class="text-white/70 text-xs font-bold uppercase tracking-wider mb-1">Target Date</p>
+            <h2 class="text-2xl font-bold">@_targetDate.ToString("dddd, MMMM dd, yyyy")</h2>
+        </div>
+        <div class="bg-white/10 p-4 rounded-xl hidden sm:block">
+            <i data-lucide="calendar" class="w-8 h-8"></i>
+        </div>
+    </div>
+
+    <!-- Attendance Form -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-700/40 flex justify-between items-center">
+            <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Members List (@_memberAttendances.Count)</h3>
+            <span class="text-xs text-gray-500 dark:text-slate-400 font-medium">Default: Absent</span>
+        </div>
+
+        <div class="divide-y divide-gray-100 dark:divide-slate-700/80">
+            @foreach (var item in _memberAttendances)
+            {
+                var localItem = item;
+                var isScanned = _scannedIds.Contains(localItem.Member.Id);
+                <div class="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/50 dark:hover:bg-slate-700/30 transition-colors @(isScanned ? "bg-emerald-50/50 dark:bg-emerald-950/20" : "")">
+                    <div class="flex items-center gap-4">
+                        <div class="bg-[#246b9c] text-white font-bold rounded-full w-10 h-10 flex items-center justify-center shrink-0 text-sm">
+                            @localItem.Member.Initials
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-1.5">
+                                @localItem.Member.LastName, @localItem.Member.FirstName
+                                @if (isScanned)
+                                {
+                                    <span class="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full font-bold">QR ✓</span>
+                                }
+                            </h4>
+                            <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">@localItem.Role</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button type="button"
+                            class="@(localItem.Status == "Present" ? "bg-green-500 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600") px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                            @onclick="@(() => { localItem.Status = "Present"; StateHasChanged(); })">
+                            Present
+                        </button>
+                        <button type="button"
+                            class="@(localItem.Status == "Excused" ? "bg-yellow-500 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600") px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                            @onclick="@(() => { localItem.Status = "Excused"; StateHasChanged(); })">
+                            Excused
+                        </button>
+                        <button type="button"
+                            class="@(localItem.Status == "Absent" ? "bg-red-500 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600") px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                            @onclick="@(() => { localItem.Status = "Absent"; StateHasChanged(); })">
+                            Absent
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="px-6 py-5 bg-gray-50/50 dark:bg-slate-700/30 border-t border-gray-100 dark:border-slate-700 flex items-center justify-end space-x-3">
+            <a href="/attendance" class="px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors">Cancel</a>
+            <button type="button" disabled="@_isSubmitting" @onclick="HandleSubmit"
+                    class="px-6 py-2.5 text-sm font-semibold text-white bg-[#246b9c] hover:bg-[#1a547b] rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2">
+                @if (_isSubmitting)
+                {
+                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Saving...</span>
+                }
+                else
+                {
+                    <i data-lucide="save" class="w-4 h-4"></i> <span>Submit Attendance</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateOnly _targetDate;
+    private string? _errorMessage;
+    private string? _scanMessage;
+    private bool _isSubmitting = false;
+    private bool _scannerOpen = false;
+    private long _currentUserId;
+    private HashSet<long> _scannedIds = new();
+
+    public class MemberAttendanceModel
+    {
+        public Member Member { get; set; } = null!;
+        public string Role { get; set; } = string.Empty;
+        public string Status { get; set; } = "Absent";
+    }
+
+    private List<MemberAttendanceModel> _memberAttendances = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateTime.Today;
+        DateOnly targetSaturday = today.DayOfWeek switch
+        {
+            DayOfWeek.Saturday => DateOnly.FromDateTime(today),
+            DayOfWeek.Sunday => DateOnly.FromDateTime(today.AddDays(-1)),
+            _ => DateOnly.FromDateTime(today.AddDays((int)DayOfWeek.Saturday - (int)today.DayOfWeek))
+        };
+        _targetDate = targetSaturday;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userIdStr = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (long.TryParse(userIdStr, out var uid)) _currentUserId = uid;
+
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        var members = await db.Members
+            .Include(m => m.MemberPositions.Where(mp => mp.IsCurrent))
+            .ThenInclude(mp => mp.Position)
+            .Where(m => m.Status == "Active")
+            .OrderBy(m => m.LastName).ThenBy(m => m.FirstName)
+            .ToListAsync();
+
+        var existingRecords = await db.Attendances
+            .Where(a => a.AttendanceDate == _targetDate)
+            .ToDictionaryAsync(a => a.MemberId, a => a.Status);
+
+        foreach (var m in members)
+        {
+            var role = m.MemberPositions.FirstOrDefault()?.Position?.PositionName ?? "Member";
+            if (role != "Member") continue;
+
+            _memberAttendances.Add(new MemberAttendanceModel
+            {
+                Member = m,
+                Role = role,
+                Status = existingRecords.TryGetValue(m.Id, out var existingStatus) ? existingStatus : "Absent"
+            });
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            try { await JS.InvokeVoidAsync("initLucide"); } catch { }
+    }
+
+    // Toggle QR scanner — start/stop camera
+    private async Task ToggleScanner()
+    {
+        _scannerOpen = !_scannerOpen;
+        StateHasChanged();
+        if (_scannerOpen)
+        {
+            await Task.Delay(100); // wait for DOM
+            try
+            {
+                var dotNetRef = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("startQrScanner", "qr-reader", dotNetRef);
+                await JS.InvokeVoidAsync("initLucide");
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = "Could not start camera: " + ex.Message;
+                _scannerOpen = false;
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            try { await JS.InvokeVoidAsync("stopQrScanner"); } catch { }
+            try { await JS.InvokeVoidAsync("initLucide"); } catch { }
+        }
+    }
+
+    // Called from JS when a QR is scanned — format: "KOA-MEMBER-{id}"
+    [JSInvokable]
+    public async Task OnQrScanned(string qrData)
+    {
+        if (qrData.StartsWith("KOA-MEMBER-") && long.TryParse(qrData.Replace("KOA-MEMBER-", ""), out var memberId))
+        {
+            var found = _memberAttendances.FirstOrDefault(x => x.Member.Id == memberId);
+            if (found != null)
+            {
+                found.Status = "Present";
+                _scannedIds.Add(memberId);
+                _scanMessage = $"✓ {found.Member.FullName} marked as Present via QR scan!";
+                _scannerOpen = false;
+                try { await JS.InvokeVoidAsync("stopQrScanner"); } catch { }
+                await InvokeAsync(StateHasChanged);
+                // Auto-clear message after 4 seconds
+                await Task.Delay(4000);
+                _scanMessage = null;
+                await InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                _scanMessage = null;
+                _errorMessage = $"QR scanned but member ID {memberId} is not in today's attendance list.";
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        else
+        {
+            _errorMessage = $"Unrecognized QR code: {qrData}";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSubmitting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        // Close scanner if open
+        if (_scannerOpen)
+        {
+            _scannerOpen = false;
+            try { await JS.InvokeVoidAsync("stopQrScanner"); } catch { }
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var existing = await db.Attendances.Where(a => a.AttendanceDate == _targetDate).ToListAsync();
+            db.Attendances.RemoveRange(existing);
+
+            var weekStart = _targetDate;
+            var weekEnd = _targetDate.AddDays(6);
+
+            foreach (var item in _memberAttendances)
+            {
+                db.Attendances.Add(new AttendanceRecord
+                {
+                    MemberId = item.Member.Id,
+                    MeetingWeekStart = weekStart,
+                    MeetingWeekEnd = weekEnd,
+                    AttendanceDate = _targetDate,
+                    Status = item.Status,
+                    RecordedBy = _currentUserId,
+                    DateRecorded = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+
+            await db.SaveChangesAsync();
+            Nav.NavigateTo("/attendance?success=Attendance recorded successfully for " + _targetDate.ToString("MMM dd, yyyy"));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Error saving attendance: " + ex.Message;
+        }
+        finally
+        {
+            _isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

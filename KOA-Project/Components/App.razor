@@ -1,0 +1,122 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Knights of the Altar</title>
+    <base href="/" />
+    <ResourcePreloader />
+    <!-- Dark Mode Initializer -->
+    <script>
+        (function() {
+            const theme = localStorage.getItem('koa_theme');
+            if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        })();
+    </script>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] },
+                    colors: {
+                        koa: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            200: '#bae0fd',
+                            300: '#7cc7fb',
+                            400: '#36a9f7',
+                            500: '#0c8de9',
+                            600: '#006ec7',
+                            700: '#1e5c8a',
+                            800: '#1b527b',
+                            900: '#0f3b5e',
+                            950: '#0b2742',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <!-- QRCode library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- HTML5 QRCode scanner library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- html2pdf for PDF exporting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    <!-- KOA Custom CSS -->
+    <link rel="stylesheet" href="css/koa.css" />
+    <!-- KOA Page Loader CSS -->
+    <link rel="stylesheet" href="css/koa-loader.css" />
+    <link rel="icon" type="image/jpeg" href="images/koa-logo.jpg" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body class="font-sans antialiased bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 transition-colors duration-200">
+    <!-- KOA Global Page Loader -->
+    <div id="koa-page-loader" aria-hidden="true" aria-label="Loading">
+        <div class="koa-loader-ring"></div>
+        <div class="koa-loader-ring"></div>
+        <div class="koa-loader-ring"></div>
+        <div class="koa-loader-content">
+            <div class="koa-loader-logo-wrap">
+                <div class="koa-loader-arc koa-loader-arc-outer"></div>
+                <div class="koa-loader-arc koa-loader-arc-inner"></div>
+                <div class="koa-loader-logo-circle">
+                    <img src="/images/koa-logo.jpg" alt="KOA Logo" />
+                </div>
+            </div>
+            <p class="koa-loader-title">Loading...</p>
+            <div class="koa-loader-dots"><span></span><span></span><span></span></div>
+            <p class="koa-loader-brand">Knights of the Altar &mdash; Sto. Rosario Toril</p>
+        </div>
+    </div>
+
+    <Routes @rendermode="InteractiveServer" />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="js/dashboard.js"></script>
+    <!-- KOA Page Loader -->
+    <script src="js/koa-loader.js"></script>
+    <script>
+        window.toggleDarkMode = function () {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('koa_theme', isDark ? 'dark' : 'light');
+            return isDark;
+        };
+        window.isDarkMode = function () {
+            return document.documentElement.classList.contains('dark');
+        };
+        window.initLucide = function () {
+            if (typeof lucide === 'undefined') return;
+            document.querySelectorAll('i[data-lucide]:not(.lucide-rendered)').forEach(el => {
+                const name = el.getAttribute('data-lucide');
+                const temp = document.createElement('div');
+                temp.innerHTML = `<i data-lucide="${name}"></i>`;
+                lucide.createIcons({ root: temp, attrs: { class: 'w-full h-full' } });
+                el.innerHTML = temp.innerHTML;
+                el.style.display = 'inline-flex';
+                el.style.alignItems = 'center';
+                el.style.justifyContent = 'center';
+                el.classList.add('lucide-rendered');
+            });
+        };
+    </script>
+</body>
+
+</html>

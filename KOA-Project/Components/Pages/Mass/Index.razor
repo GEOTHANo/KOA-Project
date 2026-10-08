@@ -1,0 +1,430 @@
+﻿@page "/mass"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "mass")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Mass Configuration - Knights of the Altar</PageTitle>
+
+<div class="space-y-6 max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Mass Configuration</h1>
+            <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage weekday and Sunday mass schedules.</p>
+        </div>
+        <button @onclick="OpenAddModal" class="bg-[#246b9c] hover:bg-[#1a547b] text-white text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center transition-colors shadow-sm self-start sm:self-auto">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Mass
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i> @_successMessage
+        </div>
+    }
+
+    <!-- Sunday Masses -->
+    <div>
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-slate-200 mb-3 flex items-center gap-2">
+            <i data-lucide="sun" class="w-5 h-5 text-amber-500"></i> Sunday Masses
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            @if (!_sundayMasses.Any())
+            {
+                <p class="text-gray-400 dark:text-slate-500 text-sm col-span-3 text-center py-8">No Sunday masses configured yet.</p>
+            }
+            @foreach (var mass in _sundayMasses)
+            {
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 relative group hover:shadow-md transition-all">
+                    <div class="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button @onclick="() => OpenEditSunday(mass)" class="text-gray-400 dark:text-slate-500 hover:text-amber-500 p-1" title="Edit">
+                            <i data-lucide="pencil" class="w-4 h-4"></i>
+                        </button>
+                        <button @onclick="() => ArchiveSunday(mass.Id)" class="text-gray-400 dark:text-slate-500 hover:text-red-500 p-1" title="Archive">
+                            <i data-lucide="archive" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center mb-3">
+                        <div class="bg-amber-50 dark:bg-amber-950/60 p-2.5 rounded-xl mr-3">
+                            <i data-lucide="sun" class="w-5 h-5 text-amber-600 dark:text-amber-400"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-800 dark:text-white text-sm">@mass.MassName</h4>
+                            <p class="text-xs text-gray-500 dark:text-slate-400">Sunday</p>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-600 dark:text-slate-300 space-y-1">
+                        <p class="flex items-center"><i data-lucide="clock" class="w-3.5 h-3.5 mr-1.5 text-gray-400 dark:text-slate-500"></i> @mass.MassTime.ToString("h:mm tt")</p>
+                        @if (!string.IsNullOrEmpty(mass.Description))
+                        {
+                            <p class="text-gray-400 dark:text-slate-500 italic">@mass.Description</p>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Weekday Masses -->
+    <div>
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-slate-200 mb-3 flex items-center gap-2">
+            <i data-lucide="calendar" class="w-5 h-5 text-[#246b9c] dark:text-blue-400"></i> Weekday Masses
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            @if (!_weekdayMasses.Any())
+            {
+                <p class="text-gray-400 dark:text-slate-500 text-sm col-span-3 text-center py-8">No weekday masses configured yet.</p>
+            }
+            @foreach (var mass in _weekdayMasses)
+            {
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 relative group hover:shadow-md transition-all">
+                    <div class="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button @onclick="() => OpenEditWeekday(mass)" class="text-gray-400 dark:text-slate-500 hover:text-amber-500 p-1" title="Edit">
+                            <i data-lucide="pencil" class="w-4 h-4"></i>
+                        </button>
+                        <button @onclick="() => ArchiveWeekday(mass.Id)" class="text-gray-400 dark:text-slate-500 hover:text-red-500 p-1" title="Archive">
+                            <i data-lucide="archive" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center mb-3">
+                        <div class="bg-sky-50 dark:bg-sky-950/60 p-2.5 rounded-xl mr-3">
+                            <i data-lucide="calendar-days" class="w-5 h-5 text-[#246b9c] dark:text-blue-400"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-800 dark:text-white text-sm">@mass.Day Mass</h4>
+                            <p class="text-xs text-gray-500 dark:text-slate-400">@mass.MassType</p>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-600 dark:text-slate-300 space-y-1">
+                        <p class="flex items-center"><i data-lucide="clock" class="w-3.5 h-3.5 mr-1.5 text-gray-400 dark:text-slate-500"></i> @mass.MassTime.ToString("h:mm tt")</p>
+                        @if (!string.IsNullOrEmpty(mass.Description))
+                        {
+                            <p class="text-gray-400 dark:text-slate-500 italic">@mass.Description</p>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Add Mass Modal -->
+@if (_showAddModal)
+{
+    <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 border border-gray-100 dark:border-slate-700">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-700">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white">Add New Mass</h3>
+                <button @onclick="CloseModals" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <!-- Tab selection -->
+            <div class="flex border-b border-gray-100 dark:border-slate-700">
+                <button @onclick="SetSundayTab" class="@(_activeTab == "sunday" ? "border-[#246b9c] text-[#246b9c] dark:text-blue-400 font-bold" : "border-transparent text-gray-500 dark:text-slate-400") py-2 px-4 border-b-2 text-sm transition-colors">Sunday Mass</button>
+                <button @onclick="SetWeekdayTab" class="@(_activeTab == "weekday" ? "border-[#246b9c] text-[#246b9c] dark:text-blue-400 font-bold" : "border-transparent text-gray-500 dark:text-slate-400") py-2 px-4 border-b-2 text-sm transition-colors">Weekday Mass</button>
+            </div>
+
+            @if (_activeTab == "sunday")
+            {
+                <EditForm Model="_addSundayModel" OnValidSubmit="AddSunday" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Mass Name</label>
+                        <InputText @bind-Value="_addSundayModel.MassName" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" placeholder="e.g. 1st Mass, Youth Mass" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Time</label>
+                        <input type="time" @bind="_addSundayModel.MassTime" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Description (Optional)</label>
+                        <InputText @bind-Value="_addSundayModel.Description" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                    </div>
+                    <button type="submit" class="w-full bg-[#246b9c] hover:bg-[#1a547b] text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-sm">Save Sunday Mass</button>
+                </EditForm>
+            }
+            else
+            {
+                <EditForm Model="_addWeekdayModel" OnValidSubmit="AddWeekday" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Day</label>
+                        <InputSelect @bind-Value="_addWeekdayModel.Day" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none">
+                            <option value="Monday">Monday</option>
+                            <option value="Tuesday">Tuesday</option>
+                            <option value="Wednesday">Wednesday</option>
+                            <option value="Thursday">Thursday</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                        </InputSelect>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Mass Type</label>
+                        <InputSelect @bind-Value="_addWeekdayModel.MassType" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none">
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                        </InputSelect>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Time</label>
+                        <input type="time" @bind="_addWeekdayModel.MassTime" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Description (Optional)</label>
+                        <InputText @bind-Value="_addWeekdayModel.Description" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                    </div>
+                    <button type="submit" class="w-full bg-[#246b9c] hover:bg-[#1a547b] text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-sm">Save Weekday Mass</button>
+                </EditForm>
+            }
+        </div>
+    </div>
+}
+
+<!-- Edit Sunday Modal -->
+@if (_showEditSundayModal && _editSundayModel != null)
+{
+    <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 border border-gray-100 dark:border-slate-700">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-700">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white">Edit Sunday Mass</h3>
+                <button @onclick="CloseModals" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <EditForm Model="_editSundayModel" OnValidSubmit="UpdateSunday" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Mass Name</label>
+                    <InputText @bind-Value="_editSundayModel.MassName" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Time</label>
+                    <input type="time" @bind="_editSundayModel.MassTime" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                    <InputText @bind-Value="_editSundayModel.Description" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <button type="submit" class="w-full bg-[#246b9c] hover:bg-[#1a547b] text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-sm">Update Sunday Mass</button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<!-- Edit Weekday Modal -->
+@if (_showEditWeekdayModal && _editWeekdayModel != null)
+{
+    <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 border border-gray-100 dark:border-slate-700">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-700">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white">Edit Weekday Mass</h3>
+                <button @onclick="CloseModals" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <EditForm Model="_editWeekdayModel" OnValidSubmit="UpdateWeekday" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Day</label>
+                    <InputSelect @bind-Value="_editWeekdayModel.Day" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none">
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                        <option value="Saturday">Saturday</option>
+                    </InputSelect>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Mass Type</label>
+                    <InputSelect @bind-Value="_editWeekdayModel.MassType" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none">
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                    </InputSelect>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Time</label>
+                    <input type="time" @bind="_editWeekdayModel.MassTime" required class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                    <InputText @bind-Value="_editWeekdayModel.Description" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <button type="submit" class="w-full bg-[#246b9c] hover:bg-[#1a547b] text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-sm">Update Weekday Mass</button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MassSunday> _sundayMasses = new();
+    private List<MassWeekday> _weekdayMasses = new();
+    private string? _successMessage;
+
+    private bool _showAddModal;
+    private bool _showEditSundayModal;
+    private bool _showEditWeekdayModal;
+    private string _activeTab = "sunday";
+
+    private void SetSundayTab() => _activeTab = "sunday";
+    private void SetWeekdayTab() => _activeTab = "weekday";
+
+    private SundayModel _addSundayModel = new();
+    private WeekdayModel _addWeekdayModel = new();
+    private SundayModel? _editSundayModel;
+    private WeekdayModel? _editWeekdayModel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMasses();
+    }
+
+    private async Task LoadMasses()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        _sundayMasses = await db.MassSundays.Where(m => m.Status == "Active").ToListAsync();
+        _weekdayMasses = await db.MassWeekdays.Where(m => m.Status == "Active").ToListAsync();
+    }
+
+    private void OpenAddModal() { _showAddModal = true; _addSundayModel = new(); _addWeekdayModel = new(); }
+    
+    private void OpenEditSunday(MassSunday mass)
+    {
+        _editSundayModel = new SundayModel { Id = mass.Id, MassName = mass.MassName, MassTime = mass.MassTime, Description = mass.Description };
+        _showEditSundayModal = true;
+    }
+    
+    private void OpenEditWeekday(MassWeekday mass)
+    {
+        _editWeekdayModel = new WeekdayModel { Id = mass.Id, Day = mass.Day, MassType = mass.MassType, MassTime = mass.MassTime, Description = mass.Description };
+        _showEditWeekdayModal = true;
+    }
+
+    private async Task CloseModals()
+    {
+        _showAddModal = false;
+        _showEditSundayModal = false;
+        _showEditWeekdayModal = false;
+        await Task.Delay(1);
+        try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+    }
+
+    private async Task AddSunday()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.MassSundays.Add(new MassSunday
+        {
+            MassName = _addSundayModel.MassName,
+            MassTime = _addSundayModel.MassTime,
+            Description = _addSundayModel.Description,
+            Status = "Active",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        _successMessage = "Sunday Mass added successfully.";
+        await LoadMasses();
+        await CloseModals();
+    }
+
+    private async Task AddWeekday()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.MassWeekdays.Add(new MassWeekday
+        {
+            Day = _addWeekdayModel.Day,
+            MassType = _addWeekdayModel.MassType,
+            MassTime = _addWeekdayModel.MassTime,
+            Description = _addWeekdayModel.Description,
+            Status = "Active",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        _successMessage = "Weekday Mass added successfully.";
+        await LoadMasses();
+        await CloseModals();
+    }
+
+    private async Task UpdateSunday()
+    {
+        if (_editSundayModel == null) return;
+        using var db = await DbFactory.CreateDbContextAsync();
+        var mass = await db.MassSundays.FindAsync(_editSundayModel.Id);
+        if (mass != null)
+        {
+            mass.MassName = _editSundayModel.MassName;
+            mass.MassTime = _editSundayModel.MassTime;
+            mass.Description = _editSundayModel.Description;
+            mass.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            _successMessage = "Sunday Mass updated successfully.";
+            await LoadMasses();
+            await CloseModals();
+        }
+    }
+
+    private async Task UpdateWeekday()
+    {
+        if (_editWeekdayModel == null) return;
+        using var db = await DbFactory.CreateDbContextAsync();
+        var mass = await db.MassWeekdays.FindAsync(_editWeekdayModel.Id);
+        if (mass != null)
+        {
+            mass.Day = _editWeekdayModel.Day;
+            mass.MassType = _editWeekdayModel.MassType;
+            mass.MassTime = _editWeekdayModel.MassTime;
+            mass.Description = _editWeekdayModel.Description;
+            mass.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            _successMessage = "Weekday Mass updated successfully.";
+            await LoadMasses();
+            await CloseModals();
+        }
+    }
+
+    private async Task ArchiveSunday(long id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Archive this Sunday mass?"))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var mass = await db.MassSundays.FindAsync(id);
+            if (mass != null) { mass.Status = "Archived"; await db.SaveChangesAsync(); }
+            _successMessage = "Sunday Mass archived successfully.";
+            await LoadMasses();
+        }
+    }
+
+    private async Task ArchiveWeekday(long id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Archive this weekday mass?"))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var mass = await db.MassWeekdays.FindAsync(id);
+            if (mass != null) { mass.Status = "Archived"; await db.SaveChangesAsync(); }
+            _successMessage = "Weekday Mass archived successfully.";
+            await LoadMasses();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+
+    public class SundayModel
+    {
+        public long Id { get; set; }
+        public string MassName { get; set; } = "Sunday Mass";
+        public TimeOnly MassTime { get; set; }
+        public string? Description { get; set; }
+    }
+
+    public class WeekdayModel
+    {
+        public long Id { get; set; }
+        public string Day { get; set; } = "Monday";
+        public string MassType { get; set; } = "AM";
+        public TimeOnly MassTime { get; set; }
+        public string? Description { get; set; }
+    }
+}

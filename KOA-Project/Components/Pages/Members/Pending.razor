@@ -1,0 +1,322 @@
+﻿@page "/members/pending"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Pending Member Approvals - Knights of the Altar</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <div class="flex items-center space-x-2">
+                <a href="/members" class="text-xs text-gray-500 dark:text-slate-400 hover:text-[#246b9c] font-semibold transition-colors flex items-center gap-1">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                    <span>Back to Members</span>
+                </a>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mt-1">Pending Member Approvals</h1>
+            <p class="text-xs text-gray-500 dark:text-slate-400">Review and approve self-registered altar server applications before encoding them into the official members database.</p>
+        </div>
+
+        <a href="/members" class="inline-flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all border border-gray-200 dark:border-slate-700">
+            <i data-lucide="users" class="w-4 h-4"></i>
+            <span>View All Members</span>
+        </a>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
+            <div class="flex items-center space-x-2">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+                <span>@_successMessage</span>
+            </div>
+            <button @onclick="() => _successMessage = null" class="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
+            <div class="flex items-center space-x-2">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600 dark:text-red-400"></i>
+                <span>@_errorMessage</span>
+            </div>
+            <button @onclick="() => _errorMessage = null" class="text-red-600 dark:text-red-400 hover:text-red-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+    }
+
+    <!-- Table Container -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm overflow-hidden transition-colors duration-200">
+        <div class="p-4 sm:p-5 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xs">
+                    @_pendingList.Count
+                </div>
+                <h3 class="text-sm font-bold text-gray-800 dark:text-slate-100">Applications Pending Approval</h3>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="p-12 text-center text-xs text-gray-400 dark:text-slate-500 space-y-3">
+                <div class="w-6 h-6 border-2 border-[#246b9c] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p>Loading pending registrations...</p>
+            </div>
+        }
+        else if (!_pendingList.Any())
+        {
+            <div class="p-16 text-center text-gray-400 dark:text-slate-500 space-y-3">
+                <div class="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-slate-800 flex items-center justify-center mx-auto text-gray-300 dark:text-slate-600">
+                    <i data-lucide="user-check" class="w-6 h-6"></i>
+                </div>
+                <p class="text-sm font-bold text-gray-700 dark:text-slate-300">No Pending Registration Requests</p>
+                <p class="text-xs">All self-registered member applications have been processed.</p>
+            </div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-gray-50 dark:bg-slate-800/60 text-gray-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-gray-100 dark:border-slate-800">
+                        <tr>
+                            <th class="px-5 py-3.5">Applicant Name</th>
+                            <th class="px-5 py-3.5">Birth Date</th>
+                            <th class="px-5 py-3.5">Contact Number</th>
+                            <th class="px-5 py-3.5">Address</th>
+                            <th class="px-5 py-3.5">Registered Date</th>
+                            <th class="px-5 py-3.5 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-slate-800/80">
+                        @foreach (var reg in _pendingList)
+                        {
+                            <tr class="hover:bg-gray-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                                <td class="px-5 py-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-9 h-9 rounded-xl bg-[#246b9c]/10 dark:bg-blue-950 text-[#246b9c] dark:text-blue-400 font-bold flex items-center justify-center shrink-0">
+                                            @reg.Initials
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-gray-900 dark:text-white">@reg.FullName</p>
+                                            <span class="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full font-semibold">Pending Approval</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-4 text-gray-600 dark:text-slate-300">
+                                    @(reg.BirthDate?.ToString("MMM dd, yyyy") ?? "-")
+                                </td>
+                                <td class="px-5 py-4 text-gray-600 dark:text-slate-300">
+                                    @(string.IsNullOrWhiteSpace(reg.ContactNumber) ? "-" : reg.ContactNumber)
+                                </td>
+                                <td class="px-5 py-4 text-gray-600 dark:text-slate-300 max-w-xs truncate">
+                                    @(string.IsNullOrWhiteSpace(reg.Address) ? "-" : reg.Address)
+                                </td>
+                                <td class="px-5 py-4 text-gray-400 dark:text-slate-500 text-[11px]">
+                                    @reg.CreatedAt.ToString("MMM dd, yyyy h:mm tt")
+                                </td>
+                                <td class="px-5 py-4 text-right">
+                                    <div class="flex items-center justify-end space-x-2">
+                                        <button @onclick="() => ApproveRegistration(reg)" disabled="@_isProcessing"
+                                                class="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
+                                                title="Approve & save to official members database">
+                                            <i data-lucide="check" class="w-4 h-4"></i>
+                                            <span>Approve</span>
+                                        </button>
+
+                                        <button @onclick="() => RejectRegistration(reg)" disabled="@_isProcessing"
+                                                class="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
+                                                title="Reject registration application">
+                                            <i data-lucide="x" class="w-4 h-4"></i>
+                                            <span>Reject</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<MemberRegistration> _pendingList = new();
+    private bool _loading = true;
+    private bool _isProcessing = false;
+    private string? _successMessage;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPendingRegistrations();
+    }
+
+    private async Task LoadPendingRegistrations()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _pendingList = await db.MemberRegistrations
+                .Where(r => r.Status == "Pending")
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load registrations: " + ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+
+    private async Task ApproveRegistration(MemberRegistration reg)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Approve {reg.FullName} as an official Knights of the Altar member?");
+        if (!confirmed) return;
+
+        _isProcessing = true;
+        _successMessage = null;
+        _errorMessage = null;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            // Duplicate name check before approving
+            var firstNameLower = reg.FirstName.ToLower().Trim();
+            var lastNameLower = reg.LastName.ToLower().Trim();
+            bool duplicateExists = await db.Members.AnyAsync(m =>
+                m.FirstName.ToLower() == firstNameLower &&
+                m.LastName.ToLower() == lastNameLower);
+            if (duplicateExists)
+            {
+                _errorMessage = $"Cannot approve: A member named '{reg.FullName}' already exists in the members list. Please verify this is not a duplicate entry before approving.";
+                _isProcessing = false;
+                StateHasChanged();
+                return;
+            }
+
+            var lastNameClean = reg.LastName.ToLower().Replace(" ", "").Trim();
+            var firstNameClean = reg.FirstName.ToLower().Replace(" ", "").Trim();
+
+            bool hasSameLastName = await db.Members.AnyAsync(m => m.LastName.ToLower().Replace(" ", "").Trim() == lastNameClean);
+
+            string baseUsername = !hasSameLastName ? ("tol" + lastNameClean) : ("tol" + lastNameClean + firstNameClean);
+            var username = baseUsername;
+
+            int counter = 1;
+            while (await db.Members.AnyAsync(m => m.Username == username))
+            {
+                username = $"{baseUsername}{counter}";
+                counter++;
+            }
+
+            var password = BCrypt.Net.BCrypt.HashPassword(username);
+
+            var newMember = new Member
+            {
+                Username = username,
+                Password = password,
+                FirstName = reg.FirstName,
+                MiddleName = reg.MiddleName,
+                LastName = reg.LastName,
+                ContactNumber = reg.ContactNumber,
+                BirthDate = reg.BirthDate,
+                Status = "Active",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            db.Members.Add(newMember);
+            await db.SaveChangesAsync();
+
+            // Assign default "Member" role
+            var memberRole = await db.Positions.FirstOrDefaultAsync(p => p.PositionName == "Member");
+            if (memberRole != null)
+            {
+                db.MemberPositions.Add(new MemberPosition
+                {
+                    MemberId = newMember.Id,
+                    PositionId = memberRole.Id,
+                    DateAssigned = DateOnly.FromDateTime(DateTime.Now),
+                    IsCurrent = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                await db.SaveChangesAsync();
+            }
+
+            // Remove record from member_registrations table per user flow request
+            var currentReg = await db.MemberRegistrations.FindAsync(reg.Id);
+            if (currentReg != null)
+            {
+                db.MemberRegistrations.Remove(currentReg);
+                await db.SaveChangesAsync();
+            }
+
+            _successMessage = $"Successfully approved {newMember.FullName}! Generated username: '{username}'";
+            await LoadPendingRegistrations();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Error approving member: " + ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RejectRegistration(MemberRegistration reg)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Reject and delete application for {reg.FullName}?");
+        if (!confirmed) return;
+
+        _isProcessing = true;
+        _successMessage = null;
+        _errorMessage = null;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var currentReg = await db.MemberRegistrations.FindAsync(reg.Id);
+            if (currentReg != null)
+            {
+                db.MemberRegistrations.Remove(currentReg);
+                await db.SaveChangesAsync();
+            }
+
+            _successMessage = $"Registration application for {reg.FullName} has been rejected and removed.";
+            await LoadPendingRegistrations();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Error rejecting application: " + ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+}

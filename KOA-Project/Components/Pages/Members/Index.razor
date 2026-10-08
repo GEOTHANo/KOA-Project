@@ -1,0 +1,360 @@
+﻿@page "/members"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "members")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Members - Knights of the Altar</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Members</h1>
+            <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage all registered members. <span class="font-medium text-gray-700 dark:text-slate-200">@_totalCount</span> total.</p>
+        </div>
+        <div class="flex items-center space-x-3 self-start sm:self-auto">
+            <a href="/members/qrcodes" class="bg-slate-700 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center transition-all shadow-sm">
+                <i data-lucide="qr-code" class="w-4 h-4 mr-2"></i>
+                <span>QR Codes</span>
+            </a>
+            <a href="/members/pending" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center transition-all shadow-sm">
+                <i data-lucide="user-check" class="w-4 h-4 mr-2"></i>
+                <span>Approve Members</span>
+                @if (_pendingCount > 0)
+                {
+                    <span class="ml-2 bg-white text-amber-600 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">@_pendingCount</span>
+                }
+            </a>
+            <a href="/members/create" class="bg-[#246b9c] hover:bg-[#1a547b] text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center transition-all shadow-sm">
+                <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Member
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters Row -->
+    <div class="flex flex-col sm:flex-row gap-3">
+        <!-- Search - uses @bind to avoid focus loss on re-render -->
+        <div class="relative flex-1 sm:max-w-xs">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+            </div>
+            <input id="member-search-input"
+                   type="text"
+                   @bind="_searchQuery"
+                   @bind:event="oninput"
+                   @bind:after="OnSearchChanged"
+                   placeholder="Search by name or username..."
+                   class="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+            @if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                <button @onclick="ClearSearch" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            }
+        </div>
+
+        <!-- Status Filter -->
+        <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i data-lucide="shield" class="w-4 h-4 text-gray-400"></i>
+            </div>
+            <select @bind="_statusFilter" @bind:after="OnFilterChanged"
+                    class="pl-9 pr-8 py-2.5 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none appearance-none min-w-[140px]">
+                <option value="">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+            </select>
+        </div>
+
+        <!-- Role Filter -->
+        <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i data-lucide="user-check" class="w-4 h-4 text-gray-400"></i>
+            </div>
+            <select @bind="_roleFilter" @bind:after="OnFilterChanged"
+                    class="pl-9 pr-8 py-2.5 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] outline-none appearance-none min-w-[140px]">
+                <option value="">All Positions</option>
+                @foreach (var role in _allRoles)
+                {
+                    <option value="@role">@role</option>
+                }
+            </select>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_searchQuery) || !string.IsNullOrEmpty(_statusFilter) || !string.IsNullOrEmpty(_roleFilter))
+        {
+            <button @onclick="ClearAllFilters" class="text-xs text-red-500 hover:text-red-700 font-semibold px-3 py-2 flex items-center gap-1 self-center">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Reset Filters
+            </button>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
+            <div class="flex items-center space-x-2">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+                <span>@_successMessage</span>
+            </div>
+            <button @onclick="() => _successMessage = null" class="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+    }
+
+    <!-- Table Container -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm overflow-hidden transition-colors duration-200">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead class="bg-gray-50 dark:bg-slate-800/60 text-gray-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-gray-100 dark:border-slate-800">
+                    <tr>
+                        <th class="px-5 py-3.5">Member Name</th>
+                        <th class="px-5 py-3.5">Username</th>
+                        <th class="px-5 py-3.5">Position</th>
+                        <th class="px-5 py-3.5">Contact Number</th>
+                        <th class="px-5 py-3.5">Status</th>
+                        <th class="px-5 py-3.5 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-slate-800/80">
+                    @if (_isLoading)
+                    {
+                        <tr><td colspan="6" class="px-5 py-12 text-center text-gray-400 dark:text-slate-500 text-xs">Loading members...</td></tr>
+                    }
+                    else if (!_members.Any())
+                    {
+                        <tr><td colspan="6" class="px-5 py-12 text-center text-gray-400 dark:text-slate-500 text-xs">No members found matching your query.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var member in _members)
+                        {
+                            var primaryRole = member.MemberPositions.FirstOrDefault()?.Position?.PositionName ?? "Member";
+                            <tr class="hover:bg-gray-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                                <td class="px-5 py-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-9 h-9 rounded-xl bg-[#246b9c]/10 dark:bg-blue-950 text-[#246b9c] dark:text-blue-400 font-bold flex items-center justify-center shrink-0 text-sm">
+                                            @member.Initials
+                                        </div>
+                                        <div>
+                                            <a href="/members/@member.Id" class="font-bold text-gray-900 dark:text-white hover:text-[#246b9c] dark:hover:text-blue-400 transition-colors">@member.FullName</a>
+                                            <p class="text-[10px] text-gray-400 dark:text-slate-500">Joined @(member.CreatedAt?.ToString("MMM yyyy") ?? "-")</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-4 font-mono text-gray-600 dark:text-slate-300 text-xs">
+                                    @member.Username
+                                </td>
+                                <td class="px-5 py-4">
+                                    <span class="bg-blue-50 dark:bg-blue-950/80 text-[#246b9c] dark:text-blue-300 font-semibold px-2.5 py-1 rounded-lg text-[11px] border border-blue-100 dark:border-blue-900/50">
+                                        @primaryRole
+                                    </span>
+                                </td>
+                                <td class="px-5 py-4 text-gray-600 dark:text-slate-300">
+                                    @(string.IsNullOrWhiteSpace(member.ContactNumber) ? "-" : member.ContactNumber)
+                                </td>
+                                <td class="px-5 py-4">
+                                    @if (member.Status == "Active")
+                                    {
+                                        <span class="bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full text-[10px]">Active</span>
+                                    }
+                                    else if (member.Status == "Inactive")
+                                    {
+                                        <span class="bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 font-bold px-2.5 py-1 rounded-full text-[10px]">Inactive</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="bg-red-50 dark:bg-red-950/80 text-red-700 dark:text-red-300 font-bold px-2.5 py-1 rounded-full text-[10px]">@member.Status</span>
+                                    }
+                                </td>
+                                <td class="px-5 py-4 text-right">
+                                    <div class="flex items-center justify-end space-x-1">
+                                        <a href="/members/@member.Id" class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 inline-flex items-center" title="View Details">
+                                            <i data-lucide="eye" class="w-4 h-4"></i>
+                                        </a>
+                                        <a href="/members/@member.Id/edit" class="p-1.5 text-gray-400 hover:text-[#246b9c] dark:hover:text-blue-400 inline-flex items-center" title="Edit Member">
+                                            <i data-lucide="edit" class="w-4 h-4"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        @if (_totalPages > 1)
+        {
+            <div class="px-5 py-4 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
+                <span>Showing @((_currentPage - 1) * _pageSize + 1)–@(Math.Min(_currentPage * _pageSize, _totalCount)) of @_totalCount members</span>
+                <div class="flex items-center space-x-1">
+                    <button @onclick="() => ChangePage(1)" disabled="@(_currentPage == 1)" class="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                        <i data-lucide="chevrons-left" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button @onclick="() => ChangePage(_currentPage - 1)" disabled="@(_currentPage == 1)" class="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                        <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <span class="px-3 py-1.5">@_currentPage / @_totalPages</span>
+                    <button @onclick="() => ChangePage(_currentPage + 1)" disabled="@(_currentPage == _totalPages)" class="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button @onclick="() => ChangePage(_totalPages)" disabled="@(_currentPage == _totalPages)" class="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                        <i data-lucide="chevrons-right" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Member> _members = new();
+    private List<string> _allRoles = new();
+    private string _searchQuery = string.Empty;
+    private string _statusFilter = string.Empty;
+    private string _roleFilter = string.Empty;
+    private string? _successMessage;
+    private bool _isLoading = true;
+
+    private int _currentPage = 1;
+    private int _pageSize = 15;
+    private int _totalPages = 1;
+    private int _totalCount = 0;
+    private int _pendingCount = 0;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+    private bool _isSecretaryOrAssistant = false;
+
+    // Debounce support
+    private System.Threading.CancellationTokenSource? _searchDebounce;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("success", out var sm))
+            _successMessage = sm;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask!;
+        var user = authState.User;
+        _isSecretaryOrAssistant = user.IsInRole("Secretary") || user.IsInRole("Assistant Secretary");
+
+        await LoadRoles();
+        await LoadMembers();
+    }
+
+    private async Task LoadRoles()
+    {
+        if (_isSecretaryOrAssistant)
+        {
+            _allRoles = new List<string> { "Member" };
+            return;
+        }
+        using var db = await DbFactory.CreateDbContextAsync();
+        _allRoles = await db.Positions.OrderBy(p => p.PositionName).Select(p => p.PositionName).ToListAsync();
+    }
+
+    private async Task LoadMembers()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        _pendingCount = await db.MemberRegistrations.CountAsync(r => r.Status == "Pending");
+
+        var query = db.Members
+            .Include(m => m.MemberPositions.Where(mp => mp.IsCurrent))
+            .ThenInclude(mp => mp.Position)
+            .AsQueryable();
+
+        if (_isSecretaryOrAssistant)
+            query = query.Where(m => m.MemberPositions.Any(mp => mp.IsCurrent && mp.Position.PositionName == "Member")
+                                  && !m.MemberPositions.Any(mp => mp.IsCurrent && mp.Position.PositionName != "Member"));
+
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            var sq = _searchQuery.ToLower();
+            query = query.Where(m =>
+                m.FirstName.ToLower().Contains(sq) ||
+                m.LastName.ToLower().Contains(sq) ||
+                m.Username.ToLower().Contains(sq));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_statusFilter))
+            query = query.Where(m => m.Status == _statusFilter);
+
+        if (!string.IsNullOrWhiteSpace(_roleFilter))
+            query = query.Where(m => m.MemberPositions.Any(mp => mp.IsCurrent && mp.Position.PositionName == _roleFilter));
+
+        _totalCount = await query.CountAsync();
+        _totalPages = Math.Max(1, (int)Math.Ceiling(_totalCount / (double)_pageSize));
+        if (_currentPage > _totalPages) _currentPage = _totalPages;
+
+        _members = await query
+            .OrderBy(m => m.LastName)
+            .ThenBy(m => m.FirstName)
+            .Skip((_currentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToListAsync();
+
+        _isLoading = false;
+        StateHasChanged();
+        try { await JS.InvokeVoidAsync("initLucide"); } catch { }
+    }
+
+    // Debounced search - fires 400ms after user stops typing, keeps input focus
+    private async Task OnSearchChanged()
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce?.Dispose();
+        _searchDebounce = new System.Threading.CancellationTokenSource();
+        var token = _searchDebounce.Token;
+
+        try
+        {
+            await Task.Delay(400, token);
+            _currentPage = 1;
+            await LoadMembers();
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        _currentPage = 1;
+        await LoadMembers();
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchQuery = string.Empty;
+        _currentPage = 1;
+        await LoadMembers();
+    }
+
+    private async Task ClearAllFilters()
+    {
+        _searchQuery = string.Empty;
+        _statusFilter = string.Empty;
+        _roleFilter = string.Empty;
+        _currentPage = 1;
+        await LoadMembers();
+    }
+
+    private async Task ChangePage(int newPage)
+    {
+        _currentPage = newPage;
+        await LoadMembers();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            try { await JS.InvokeVoidAsync("initLucide"); } catch { }
+    }
+}

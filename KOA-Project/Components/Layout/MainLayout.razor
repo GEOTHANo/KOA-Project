@@ -1,0 +1,308 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JS
+
+<AuthorizeView>
+    <Authorized>
+        @{
+            var user = context.User;
+            var firstName = user.FindFirst("FirstName")?.Value ?? "";
+            var lastName = user.FindFirst("LastName")?.Value ?? "";
+            var primaryPosition = user.FindAll(ClaimTypes.Role).FirstOrDefault()?.Value ?? "Member";
+        }
+        <div class="font-sans antialiased bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 flex flex-col h-screen overflow-hidden transition-colors duration-200">
+
+            <!-- Top Header (Kampus Kalinga styled in KOA Blue) -->
+            <header class="bg-[#1e5c8a] dark:bg-[#0f2842] text-white border-b border-blue-900/30 dark:border-slate-800 shadow-sm z-30 shrink-0">
+                <div class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+                    <!-- Left: Brand Logo & Title -->
+                    <div class="flex items-center">
+                        <!-- Transparent Logo (No white card background) -->
+                        <div class="mr-3 w-10 h-10 flex items-center justify-center shrink-0">
+                            <img src="/images/koa-logo.jpg" alt="KOA Logo" class="w-full h-full object-contain rounded-full shadow-sm" />
+                        </div>
+                        <div>
+                            <h1 class="text-base sm:text-lg font-bold leading-tight tracking-tight">Knights of the Altar</h1>
+                            <p class="text-xs text-yellow-300 dark:text-yellow-400 font-medium leading-tight">@primaryPosition Tol @lastName</p>
+                        </div>
+                    </div>
+
+                    <!-- Right Controls: Search bar, Dark Mode Toggle, Notifications -->
+                    <div class="flex items-center space-x-2 sm:space-x-3">
+                        <!-- Dark/Light Mode Toggle Button -->
+                        <button type="button" @onclick="ToggleDarkMode" class="text-white/90 hover:text-white hover:bg-white/15 p-2 rounded-full transition-colors focus:outline-none" title="Toggle Dark/Light Mode">
+                            @if (_isDarkMode)
+                            {
+                                <i data-lucide="sun" class="w-5 h-5 text-yellow-300"></i>
+                            }
+                            else
+                            {
+                                <i data-lucide="moon" class="w-5 h-5"></i>
+                            }
+                        </button>
+
+                        <!-- Notification Dropdown -->
+                        <div class="relative">
+                            <button type="button" @onclick="ToggleNotificationDropdown" class="text-white/90 hover:text-white hover:bg-white/15 p-2 rounded-full relative transition-colors focus:outline-none group" title="Notifications">
+                                <i data-lucide="bell" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                                @if (_notificationCount > 0)
+                                {
+                                    <span class="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white dark:border-slate-900"></span>
+                                    </span>
+                                }
+                            </button>
+
+                            @if (_isNotificationDropdownOpen)
+                            {
+                                <div class="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 z-50 overflow-hidden text-gray-900 dark:text-slate-100" @onclick:stopPropagation="true">
+                                    <div class="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/60 flex justify-between items-center">
+                                        <h3 class="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-slate-300">Notifications</h3>
+                                        @if (_notificationCount > 0)
+                                        {
+                                            <span class="bg-[#1e5c8a] dark:bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">@_notificationCount unread</span>
+                                        }
+                                    </div>
+                                    <div class="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/50">
+                                        @if (!_recentNotifications.Any())
+                                        {
+                                            <div class="p-6 text-center text-xs text-gray-400 dark:text-slate-500">
+                                                No recent notifications.
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var notif in _recentNotifications)
+                                            {
+                                                bool isUnread = _currentUserId > 0 && !notif.ReadByIds.Contains(_currentUserId);
+                                                <a href="/notifications/view/@notif.Id" @onclick="() => _isNotificationDropdownOpen = false" class="block p-4 hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors relative @(isUnread ? "bg-blue-50/30 dark:bg-slate-800/80" : "")">
+                                                    @if (isUnread)
+                                                    {
+                                                        <div class="absolute left-2 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#1e5c8a] dark:bg-blue-400 rounded-full"></div>
+                                                    }
+                                                    <div class="pl-3">
+                                                        <p class="text-xs font-bold @(isUnread ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-slate-300")">@notif.Title</p>
+                                                        <p class="text-[11px] text-gray-500 dark:text-slate-400 truncate mt-0.5">@notif.Message</p>
+                                                        <p class="text-[10px] text-gray-400 dark:text-slate-500 mt-1">@(notif.CreatedAt?.ToString("MMM dd, h:mm tt"))</p>
+                                                    </div>
+                                                </a>
+                                            }
+                                        }
+                                    </div>
+                                    <div class="p-2 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/60 text-center">
+                                        <a href="/notifications" @onclick="() => _isNotificationDropdownOpen = false" class="text-xs font-bold text-[#1e5c8a] dark:text-blue-400 hover:underline">View all notifications &rarr;</a>
+                                    </div>
+                                </div>
+                                <div class="fixed inset-0 z-40" @onclick="() => _isNotificationDropdownOpen = false"></div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex flex-1 overflow-hidden relative">
+                <!-- Desktop Sidebar (Hidden on Mobile) -->
+                <aside class="hidden lg:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 shrink-0 h-full transition-colors duration-200">
+                    <div class="px-6 py-4 border-b border-gray-100 dark:border-slate-800">
+                        <span class="text-[11px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">NAVIGATION</span>
+                    </div>
+
+                    <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+                        @if (AuthService.CanAccess(user, "dashboard"))
+                        {
+                            <NavLink href="/dashboard" class="flex items-center px-4 py-2.5 text-xs font-medium rounded-xl text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all" ActiveClass="bg-blue-50 dark:bg-blue-950/60 text-[#1e5c8a] dark:text-blue-400 font-bold border-l-4 border-yellow-400 shadow-xs" Match="NavLinkMatch.All">
+                                <i data-lucide="home" class="w-4 h-4 mr-3 opacity-80"></i>
+                                Dashboard
+                            </NavLink>
+                        }
+                        @if (AuthService.CanAccess(user, "schedules"))
+                        {
+                            <NavLink href="/schedules" class="flex items-center px-4 py-2.5 text-xs font-medium rounded-xl text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all" ActiveClass="bg-blue-50 dark:bg-blue-950/60 text-[#1e5c8a] dark:text-blue-400 font-bold border-l-4 border-yellow-400 shadow-xs">
+                                <i data-lucide="calendar" class="w-4 h-4 mr-3 opacity-80"></i>
+                                Schedules
+                            </NavLink>
+                        }
+                        @if (AuthService.CanAccess(user, "members"))
+                        {
+                            <NavLink href="/members" class="flex items-center px-4 py-2.5 text-xs font-medium rounded-xl text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all" ActiveClass="bg-blue-50 dark:bg-blue-950/60 text-[#1e5c8a] dark:text-blue-400 font-bold border-l-4 border-yellow-400 shadow-xs">
+                                <i data-lucide="users" class="w-4 h-4 mr-3 opacity-80"></i>
+                                Members
+                            </NavLink>
+                        }
+                        @if (AuthService.CanAccess(user, "attendance"))
+                        {
+                            <NavLink href="/attendance" class="flex items-center px-4 py-2.5 text-xs font-medium rounded-xl text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all" ActiveClass="bg-blue-50 dark:bg-blue-950/60 text-[#1e5c8a] dark:text-blue-400 font-bold border-l-4 border-yellow-400 shadow-xs">
+                                <i data-lucide="check-square" class="w-4 h-4 mr-3 opacity-80"></i>
+                                Attendance
+                            </NavLink>
+                        }
+                        @if (AuthService.CanAccess(user, "notifications"))
+                        {
+                            <NavLink href="/notifications" class="flex items-center px-4 py-2.5 text-xs font-medium rounded-xl text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all" ActiveClass="bg-blue-50 dark:bg-blue-950/60 text-[#1e5c8a] dark:text-blue-400 font-bold border-l-4 border-yellow-400 shadow-xs">
+                                <i data-lucide="bell" class="w-4 h-4 mr-3 opacity-80"></i>
+                                Notifications
+                            </NavLink>
+                        }
+                        @if (AuthService.CanAccess(user, "mass"))
+                        {
+                            <NavLink href="/mass" class="flex items-center px-4 py-2.5 text-xs font-medium rounded-xl text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all" ActiveClass="bg-blue-50 dark:bg-blue-950/60 text-[#1e5c8a] dark:text-blue-400 font-bold border-l-4 border-yellow-400 shadow-xs">
+                                <i data-lucide="book-open" class="w-4 h-4 mr-3 opacity-80"></i>
+                                Mass
+                            </NavLink>
+                        }
+                        @if (AuthService.CanAccess(user, "settings"))
+                        {
+                            <NavLink href="/settings" class="flex items-center px-4 py-2.5 text-xs font-medium rounded-xl text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all" ActiveClass="bg-blue-50 dark:bg-blue-950/60 text-[#1e5c8a] dark:text-blue-400 font-bold border-l-4 border-yellow-400 shadow-xs">
+                                <i data-lucide="shield" class="w-4 h-4 mr-3 opacity-80"></i>
+                                Settings
+                            </NavLink>
+                        }
+                    </nav>
+
+                    <div class="p-4 border-t border-gray-100 dark:border-slate-800 space-y-3">
+                        <a href="/logout" data-enhance-nav="false" target="_top" class="flex items-center px-4 py-2.5 text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-all">
+                            <i data-lucide="log-out" class="w-4 h-4 mr-3"></i>
+                            Logout
+                        </a>
+
+                    </div>
+                </aside>
+
+                <!-- Mobile Bottom Navigation Bar (ONLY shown on Mobile < 1024px, ONLY Icons, No Text) -->
+                <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 px-2 py-2.5 flex items-center justify-around shadow-2xl transition-colors duration-200">
+                    @if (AuthService.CanAccess(user, "dashboard"))
+                    {
+                        <NavLink href="/dashboard" class="flex items-center justify-center p-2.5 rounded-xl text-gray-500 dark:text-slate-400 hover:text-[#1e5c8a] transition-all" ActiveClass="text-[#1e5c8a] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 font-bold scale-110 shadow-xs" Match="NavLinkMatch.All" title="Dashboard">
+                            <i data-lucide="home" class="w-5 h-5"></i>
+                        </NavLink>
+                    }
+                    @if (AuthService.CanAccess(user, "schedules"))
+                    {
+                        <NavLink href="/schedules" class="flex items-center justify-center p-2.5 rounded-xl text-gray-500 dark:text-slate-400 hover:text-[#1e5c8a] transition-all" ActiveClass="text-[#1e5c8a] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 font-bold scale-110 shadow-xs" title="Schedules">
+                            <i data-lucide="calendar" class="w-5 h-5"></i>
+                        </NavLink>
+                    }
+                    @if (AuthService.CanAccess(user, "members"))
+                    {
+                        <NavLink href="/members" class="flex items-center justify-center p-2.5 rounded-xl text-gray-500 dark:text-slate-400 hover:text-[#1e5c8a] transition-all" ActiveClass="text-[#1e5c8a] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 font-bold scale-110 shadow-xs" title="Members">
+                            <i data-lucide="users" class="w-5 h-5"></i>
+                        </NavLink>
+                    }
+                    @if (AuthService.CanAccess(user, "attendance"))
+                    {
+                        <NavLink href="/attendance" class="flex items-center justify-center p-2.5 rounded-xl text-gray-500 dark:text-slate-400 hover:text-[#1e5c8a] transition-all" ActiveClass="text-[#1e5c8a] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 font-bold scale-110 shadow-xs" title="Attendance">
+                            <i data-lucide="check-square" class="w-5 h-5"></i>
+                        </NavLink>
+                    }
+                    @if (AuthService.CanAccess(user, "notifications"))
+                    {
+                        <NavLink href="/notifications" class="flex items-center justify-center p-2.5 rounded-xl text-gray-500 dark:text-slate-400 hover:text-[#1e5c8a] transition-all" ActiveClass="text-[#1e5c8a] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 font-bold scale-110 shadow-xs" title="Notifications">
+                            <i data-lucide="bell" class="w-5 h-5"></i>
+                        </NavLink>
+                    }
+                    @if (AuthService.CanAccess(user, "mass"))
+                    {
+                        <NavLink href="/mass" class="flex items-center justify-center p-2.5 rounded-xl text-gray-500 dark:text-slate-400 hover:text-[#1e5c8a] transition-all" ActiveClass="text-[#1e5c8a] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 font-bold scale-110 shadow-xs" title="Mass">
+                            <i data-lucide="book-open" class="w-5 h-5"></i>
+                        </NavLink>
+                    }
+                    @if (AuthService.CanAccess(user, "settings"))
+                    {
+                        <NavLink href="/settings" class="flex items-center justify-center p-2.5 rounded-xl text-gray-500 dark:text-slate-400 hover:text-[#1e5c8a] transition-all" ActiveClass="text-[#1e5c8a] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 font-bold scale-110 shadow-xs" title="Settings">
+                            <i data-lucide="shield" class="w-5 h-5"></i>
+                        </NavLink>
+                    }
+                    <a href="/logout" data-enhance-nav="false" target="_top" class="flex items-center justify-center p-2.5 rounded-xl text-red-500 hover:text-red-600 dark:text-red-400 transition-all" title="Logout">
+                        <i data-lucide="log-out" class="w-5 h-5"></i>
+                    </a>
+                </nav>
+
+                <!-- Main Content Area -->
+                <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 transition-colors duration-200">
+                    @Body
+                </main>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        @{ Nav.NavigateTo("/login", forceLoad: true); }
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private int _notificationCount = 0;
+    private bool _isNotificationDropdownOpen = false;
+    private bool _isDarkMode = false;
+    private List<Notification> _recentNotifications = new();
+    private long _currentUserId = 0;
+
+    private void ToggleNotificationDropdown()
+    {
+        _isNotificationDropdownOpen = !_isNotificationDropdownOpen;
+    }
+
+    private async Task ToggleDarkMode()
+    {
+        _isDarkMode = await JS.InvokeAsync<bool>("toggleDarkMode");
+        StateHasChanged();
+        await Task.Delay(10);
+        try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var nameId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (long.TryParse(nameId, out var id))
+            {
+                _currentUserId = id;
+            }
+
+            var positionIds = user.FindAll("PositionId")
+                .Select(c => long.TryParse(c.Value, out var pid) ? (long?)pid : null)
+                .Where(pid => pid != null)
+                .Select(pid => pid!.Value)
+                .ToList();
+
+            if (positionIds.Any())
+            {
+                using var db = await DbFactory.CreateDbContextAsync();
+                var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+                var recentNotifications = await db.Notifications
+                    .Where(n => n.CreatedAt >= thirtyDaysAgo)
+                    .OrderByDescending(n => n.CreatedAt)
+                    .ToListAsync();
+
+                _recentNotifications = recentNotifications
+                    .Where(n => n.TargetRoleIds.Any(roleId => positionIds.Contains(roleId)))
+                    .Take(5)
+                    .ToList();
+
+                _notificationCount = recentNotifications
+                    .Where(n => n.TargetRoleIds.Any(roleId => positionIds.Contains(roleId)))
+                    .Count(n => _currentUserId > 0 && !n.ReadByIds.Contains(_currentUserId));
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _isDarkMode = await JS.InvokeAsync<bool>("isDarkMode");
+                StateHasChanged();
+            }
+            catch (Exception) { }
+
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+}

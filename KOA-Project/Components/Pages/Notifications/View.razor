@@ -1,0 +1,176 @@
+﻿@page "/notifications/view/{Id:long}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+
+<PageTitle>View Notification - Knights of the Altar</PageTitle>
+
+<div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <a href="/notifications" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 transition-colors inline-flex items-center text-sm font-medium">
+            <i data-lucide="arrow-left" class="w-4 h-4 mr-1"></i> Back to Notifications
+        </a>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 flex justify-center items-center h-64">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#246b9c]"></div>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-red-50 rounded-full mb-4">
+                <i data-lucide="alert-circle" class="w-8 h-8 text-red-400"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-1">Error Loading Notification</h3>
+            <p class="text-sm text-gray-500">@_errorMessage</p>
+            <a href="/notifications" class="mt-4 inline-flex px-4 py-2 text-sm font-medium text-[#246b9c] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">Return to List</a>
+        </div>
+    }
+    else if (_notification == null)
+    {
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-red-50 rounded-full mb-4">
+                <i data-lucide="alert-circle" class="w-8 h-8 text-red-400"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-1">Notification Not Found</h3>
+            <p class="text-sm text-gray-500">The notification you are looking for does not exist or you don't have access to it.</p>
+            <a href="/notifications" class="mt-4 inline-flex px-4 py-2 text-sm font-medium text-[#246b9c] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">Return to List</a>
+        </div>
+    }
+    else
+    {
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="p-8 md:p-10">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="bg-[#246b9c]/10 text-[#246b9c] px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center">
+                        <i data-lucide="bell" class="w-3.5 h-3.5 mr-1.5"></i> Notification
+                    </div>
+                    <div class="text-sm text-gray-500 font-medium">
+                        @(_notification.CreatedAt?.ToString("MMMM dd, yyyy 'at' h:mm tt"))
+                    </div>
+                </div>
+
+                <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight mb-6 leading-tight">
+                    @_notification.Title
+                </h1>
+
+                <div class="flex items-center gap-4 mb-8 pb-8 border-b border-gray-100">
+                    <div class="bg-gray-100 text-gray-600 font-bold rounded-full w-12 h-12 flex items-center justify-center text-lg">
+                        @(_notification.Creator?.Initials ?? "S")
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 font-medium">Sent by</p>
+                        <p class="text-gray-900 font-bold">@(_notification.Creator?.FullName ?? "System Administrator")</p>
+                    </div>
+                </div>
+
+                <div class="prose max-w-none text-gray-700 leading-relaxed mb-8 whitespace-pre-wrap font-medium">
+                    @_notification.Message
+                </div>
+            </div>
+            
+            <div class="bg-gray-50 px-8 py-6 border-t border-gray-100">
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Target Audiences</h4>
+                <div class="flex flex-wrap gap-2">
+                    @if (_targetPositions.Any())
+                    {
+                        @foreach (var pos in _targetPositions)
+                        {
+                            <span class="inline-flex items-center px-3 py-1 rounded-lg text-sm font-semibold bg-white border border-gray-200 text-gray-700 shadow-sm">
+                                @pos.PositionName
+                            </span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="text-gray-400 text-sm italic">No specific roles specified</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public long Id { get; set; }
+
+    private Notification? _notification;
+    private List<Position> _targetPositions = new();
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (!user.Identity?.IsAuthenticated ?? true)
+            {
+                Nav.NavigateTo("/login");
+                return;
+            }
+
+            long currentUserId = 0;
+            var nameIdentifier = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (long.TryParse(nameIdentifier, out var id))
+            {
+                currentUserId = id;
+            }
+
+            using var db = await DbFactory.CreateDbContextAsync();
+            
+            _notification = await db.Notifications
+                .Include(n => n.Creator)
+                .FirstOrDefaultAsync(n => n.Id == Id);
+
+            if (_notification != null)
+            {
+                var targetIds = _notification.TargetRoleIds;
+                if (targetIds.Any())
+                {
+                    // Fetch all positions in memory first to avoid EF Core primitive collection translation error on MySQL
+                    var allPositions = await db.Positions.ToListAsync();
+                    _targetPositions = allPositions.Where(p => targetIds.Contains(p.Id)).ToList();
+                }
+
+                // Mark as read if not already read
+                if (currentUserId > 0)
+                {
+                    var readList = _notification.ReadByIds;
+                    if (!readList.Contains(currentUserId))
+                    {
+                        readList.Add(currentUserId);
+                        _notification.ReadByIds = readList;
+                        
+                        db.Entry(_notification).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+                        await db.SaveChangesAsync();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message + "\n" + ex.StackTrace;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender || !_isLoading)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+}
+

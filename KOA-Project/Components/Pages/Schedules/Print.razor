@@ -1,0 +1,145 @@
+@page "/schedules/print/{DateStr}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "schedules")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@layout PrintLayout
+
+<PageTitle>Print Schedule - Knights of the Altar</PageTitle>
+
+<style>
+    @@media print {
+        body { font-family: 'Times New Roman', serif; padding: 20px; }
+        .page-break { page-break-before: always; }
+        .print-header { text-align: center; margin-bottom: 20px; }
+        .print-header h1 { font-size: 18pt; font-weight: bold; margin: 0; }
+        .print-header p { font-size: 12pt; margin: 5px 0; }
+        .mass-title { font-size: 14pt; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 5px; }
+        .member-list { list-style-type: none; padding-left: 0; margin-top: 0; }
+        .member-list li { font-size: 12pt; padding: 5px 0; }
+        .footer { position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10pt; border-top: 1px solid #ccc; padding-top: 5px; }
+    }
+    
+    /* Screen styling just in case */
+    .print-container { max-w-4xl; margin: 0 auto; padding: 2rem; background: white; font-family: serif; }
+</style>
+
+<div class="print-container">
+    <!-- PAGE 1: Sunday Mass -->
+    <div class="print-header">
+        <h1>KNIGHTS OF THE ALTAR - SANTO ROSARIO TORIL</h1>
+        <p>Sunday Mass Schedule</p>
+        <p>Week of @_weekStart.ToString("MMMM dd, yyyy")</p>
+    </div>
+
+    @if (!_sundaySchedules.Any())
+    {
+        <p style="text-align:center; font-style:italic; margin-top:50px;">No Sunday schedules found.</p>
+    }
+    else
+    {
+        @foreach (var sched in _sundaySchedules)
+        {
+            <div class="mass-title">
+                @sched.MassName (@sched.MassDate.ToString("MMM dd") at @sched.MassTime.ToString("h:mm tt"))
+            </div>
+            <ul class="member-list">
+                @foreach (var sm in sched.ScheduleMembers)
+                {
+                    <li>@sm.Member.FullName</li>
+                }
+                @if (!sched.ScheduleMembers.Any())
+                {
+                    <li><em style="color:#666;">No servers assigned</em></li>
+                }
+            </ul>
+        }
+    }
+
+    <!-- PAGE BREAK -->
+    <div class="page-break"></div>
+
+    <!-- PAGE 2: Weekday Mass -->
+    <div class="print-header">
+        <h1>KNIGHTS OF THE ALTAR - SANTO ROSARIO TORIL</h1>
+        <p>Weekday Mass Schedule</p>
+        <p>Week of @_weekStart.ToString("MMMM dd, yyyy")</p>
+    </div>
+
+    @if (!_weekdaySchedules.Any())
+    {
+        <p style="text-align:center; font-style:italic; margin-top:50px;">No weekday schedules found.</p>
+    }
+    else
+    {
+        @foreach (var sched in _weekdaySchedules)
+        {
+            <div class="mass-title">
+                @sched.Day - @sched.MassType (@sched.MassTime.ToString("h:mm tt"))
+            </div>
+            <ul class="member-list">
+                @foreach (var sm in sched.ScheduleMembers)
+                {
+                    <li>@sm.Member.FullName</li>
+                }
+                @if (!sched.ScheduleMembers.Any())
+                {
+                    <li><em style="color:#666;">No servers assigned</em></li>
+                }
+            </ul>
+        }
+    }
+    
+    <div class="footer" style="display:none;">
+        <span class="print-only" style="display:block;">Printed on @DateTime.Now.ToString("MMM dd, yyyy h:mm tt")</span>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string DateStr { get; set; } = string.Empty;
+
+    private DateOnly _weekStart;
+    private List<ScheduleSunday> _sundaySchedules = new();
+    private List<ScheduleWeekday> _weekdaySchedules = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (DateOnly.TryParse(DateStr, out var d))
+        {
+            _weekStart = d;
+        }
+        else
+        {
+            Nav.NavigateTo("/schedules");
+            return;
+        }
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        var weekEnd = _weekStart.AddDays(6);
+
+        _sundaySchedules = await db.ScheduleSundays
+            .Include(s => s.ScheduleMembers)
+            .ThenInclude(sm => sm.Member)
+            .Where(s => s.MassDate >= _weekStart && s.MassDate <= weekEnd)
+            .OrderBy(s => s.MassDate).ThenBy(s => s.MassTime)
+            .ToListAsync();
+
+        _weekdaySchedules = await db.ScheduleWeekdays
+            .Include(s => s.ScheduleMembers)
+            .ThenInclude(sm => sm.Member)
+            .Where(s => s.WeekStart == _weekStart)
+            .OrderBy(s => s.MassTime)
+            .ToListAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Task.Delay(500); // Give it a moment to render
+            await JS.InvokeVoidAsync("window.print");
+        }
+    }
+}

@@ -1,0 +1,17 @@
+<Router AppAssembly="typeof(App).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(KOA_Project.Components.Layout.MainLayout)">
+            <NotAuthorized>
+                <KOA_Project.Components.Layout.EmptyLayout>
+                    <KOA_Project.Components.Pages.Auth.Login />
+                </KOA_Project.Components.Layout.EmptyLayout>
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <KOA_Project.Components.Layout.MainLayout>
+            <p class="text-gray-500 p-8">Page not found.</p>
+        </KOA_Project.Components.Layout.MainLayout>
+    </NotFound>
+</Router>

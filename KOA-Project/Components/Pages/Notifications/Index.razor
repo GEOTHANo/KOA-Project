@@ -1,0 +1,294 @@
+@page "/notifications"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "notifications")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@inject AuthService AuthService
+
+<PageTitle>Notifications - Knights of the Altar</PageTitle>
+
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Notifications</h1>
+            <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage and send notifications to specific roles.</p>
+        </div>
+        <AuthorizeView Policy="notifications.create">
+            <Authorized>
+                <button @onclick="OpenAddModal" class="bg-[#246b9c] hover:bg-[#1a547b] text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm inline-flex items-center justify-center self-start sm:self-auto">
+                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Notification
+                </button>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">@_successMessage</div>
+    }
+    @if (_errors.Any())
+    {
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <ul class="list-disc list-inside">
+                @foreach (var error in _errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <!-- Notifications List -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+        @if (!_notifications.Any())
+        {
+            <div class="p-8 text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-50 rounded-full mb-4">
+                    <i data-lucide="bell" class="w-8 h-8 text-gray-400"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-1">No notifications found</h3>
+                <p class="text-sm text-gray-500">Get started by creating a new notification.</p>
+            </div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-slate-300 font-medium border-b border-gray-100 dark:border-slate-700 uppercase text-xs tracking-wider">
+                        <tr>
+                            <th class="px-6 py-4">Date</th>
+                            <th class="px-6 py-4 w-1/4">Title</th>
+                            <th class="px-6 py-4 w-1/2">Message</th>
+                            <th class="px-6 py-4">Created By</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        @foreach (var notification in _notifications)
+                        {
+                            <tr @onclick="() => NavigateToView(notification.Id)" class="hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer group">
+                                <td class="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-slate-400 group-hover:text-blue-700 dark:group-hover:text-blue-300">
+                                    @(notification.CreatedAt?.ToString("MMM dd, yyyy") ?? "â€”")<br>
+                                    <span class="text-xs">@(notification.CreatedAt?.ToString("h:mm tt") ?? "â€”")</span>
+                                </td>
+                                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white group-hover:text-blue-900 dark:group-hover:text-blue-200">@notification.Title</td>
+                                <td class="px-6 py-4 text-gray-500 dark:text-slate-400 truncate max-w-sm group-hover:text-blue-800 dark:group-hover:text-blue-300" title="@notification.Message">
+                                    @(notification.Message.Length > 100 ? notification.Message.Substring(0, 97) + "..." : notification.Message)
+                                </td>
+                                <td class="px-6 py-4 text-gray-500 dark:text-slate-400 whitespace-nowrap group-hover:text-blue-700 dark:group-hover:text-blue-300">
+                                    @(notification.Creator?.FullName ?? "System")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Add Notification Modal -->
+@if (_showAddModal)
+{
+    <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all duration-300">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden transform transition-all border border-gray-100 dark:border-slate-700">
+            <div class="flex justify-between items-center px-8 py-5 border-b border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-900/50">
+                <div class="flex items-center gap-3">
+                    <div class="bg-[#246b9c]/10 p-2 rounded-lg text-[#246b9c]">
+                        <i data-lucide="send" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white tracking-tight">Compose Notification</h3>
+                </div>
+                <button type="button" @onclick="CloseModal" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 bg-gray-100 hover:bg-gray-200 rounded-full p-2 transition-colors focus:outline-none">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <EditForm Model="_newNotification" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <div class="p-8 grid grid-cols-1 lg:grid-cols-5 gap-8 bg-white">
+                    <!-- Left Column: Content -->
+                    <div class="lg:col-span-3 space-y-5">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1.5">Notification Title</label>
+                            <InputText @bind-Value="_newNotification.Title" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-[#246b9c]/20 focus:border-[#246b9c] outline-none transition-all placeholder-gray-400" placeholder="e.g. Schedule Update for Sunday Mass" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1.5">Message</label>
+                            <InputTextArea @bind-Value="_newNotification.Message" required rows="7" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-[#246b9c]/20 focus:border-[#246b9c] outline-none transition-all resize-none placeholder-gray-400" placeholder="Type the detailed notification message here..."></InputTextArea>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column: Roles -->
+                    <div class="lg:col-span-2 flex flex-col h-full border border-gray-100 rounded-xl overflow-hidden bg-gray-50/50">
+                        <div class="bg-gray-100/50 px-5 py-4 border-b border-gray-100">
+                            <label class="block text-sm font-bold text-gray-700">Select Recipients</label>
+                            <p class="text-[11px] text-gray-500 mt-0.5 leading-tight">Choose which roles will receive this notification.</p>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-3 space-y-1.5 max-h-[300px]">
+                            @foreach (var position in _positions)
+                            {
+                                bool isChecked = _newNotification.SelectedRoles.Contains(position.Id);
+                                <label class="flex items-center cursor-pointer p-3 rounded-xl transition-all @(isChecked ? "bg-[#246b9c]/5 border border-[#246b9c]/20" : "hover:bg-gray-100 border border-transparent")">
+                                    <div class="relative flex items-center justify-center">
+                                        <input type="checkbox" checked="@isChecked"
+                                               @onchange="@(e => ToggleRole(position.Id, e.Value))"
+                                               class="peer appearance-none w-5 h-5 border-2 border-gray-300 rounded focus:ring-0 focus:outline-none checked:bg-[#246b9c] checked:border-[#246b9c] transition-all cursor-pointer shadow-sm" />
+                                        <i data-lucide="check" class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100"></i>
+                                    </div>
+                                    <span class="ml-3 text-sm @(isChecked ? "text-[#246b9c] font-bold" : "text-gray-700 font-medium")">@position.PositionName</span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="px-8 py-5 border-t border-gray-100 bg-gray-50/80 flex justify-end items-center gap-3">
+                    <button type="button" @onclick="CloseModal" class="px-5 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-200">Cancel</button>
+                    <button type="submit" class="px-6 py-2.5 text-sm font-bold text-white bg-[#246b9c] hover:bg-[#1a547b] rounded-xl transition-colors shadow-md shadow-[#246b9c]/20 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-[#246b9c] focus:ring-offset-1">
+                        <i data-lucide="send" class="w-4 h-4"></i> Send Notification
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Notification> _notifications = new();
+    private List<Position> _positions = new();
+    private string? _successMessage;
+    private List<string> _errors = new();
+    
+    private bool _showAddModal;
+    private NotificationModel _newNotification = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Get the current user's position IDs
+        var positionIds = user.FindAll("PositionId")
+            .Select(c => long.TryParse(c.Value, out var pid) ? (long?)pid : null)
+            .Where(pid => pid != null)
+            .Select(pid => pid!.Value)
+            .ToList();
+
+        // Check if user has create permission (non-member roles)
+        bool canCreate = AuthService.CanAccess(user, "notifications.create");
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        var allNotifications = await db.Notifications
+            .Include(n => n.Creator)
+            .OrderByDescending(n => n.CreatedAt)
+            .ToListAsync();
+
+        // If user can create (admin/officer), show all; otherwise filter to their roles
+        if (canCreate)
+        {
+            _notifications = allNotifications;
+        }
+        else
+        {
+            _notifications = allNotifications
+                .Where(n => n.TargetRoleIds.Any(roleId => positionIds.Contains(roleId)))
+                .ToList();
+        }
+            
+        _positions = await db.Positions.ToListAsync();
+    }
+
+    private void NavigateToView(long id)
+    {
+        Nav.NavigateTo($"/notifications/view/{id}");
+    }
+
+    private void OpenAddModal()
+    {
+        _newNotification = new NotificationModel();
+        _showAddModal = true;
+    }
+
+    private async Task CloseModal()
+    {
+        _showAddModal = false;
+        await Task.Delay(1);
+        try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+    }
+
+    private void ToggleRole(long positionId, object? checkedValue)
+    {
+        bool isChecked = (bool?)checkedValue ?? false;
+        if (isChecked && !_newNotification.SelectedRoles.Contains(positionId))
+        {
+            _newNotification.SelectedRoles.Add(positionId);
+        }
+        else if (!isChecked && _newNotification.SelectedRoles.Contains(positionId))
+        {
+            _newNotification.SelectedRoles.Remove(positionId);
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _errors.Clear();
+        if (string.IsNullOrWhiteSpace(_newNotification.Title)) _errors.Add("Title is required.");
+        if (string.IsNullOrWhiteSpace(_newNotification.Message)) _errors.Add("Message is required.");
+        if (!_newNotification.SelectedRoles.Any()) _errors.Add("Please select at least one role.");
+        
+        if (_errors.Any()) return;
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            long creatorId = 1; // Default
+            var nameIdentifier = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (long.TryParse(nameIdentifier, out var id))
+                creatorId = id;
+
+            using var db = await DbFactory.CreateDbContextAsync();
+            
+            db.Notifications.Add(new Notification
+            {
+                Title = _newNotification.Title,
+                Message = _newNotification.Message,
+                TargetRoleIds = _newNotification.SelectedRoles,
+                CreatedBy = creatorId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            
+            await db.SaveChangesAsync();
+            _successMessage = "Notification sent successfully.";
+            await LoadData();
+            await CloseModal();
+        }
+        catch (Exception ex)
+        {
+            _errors.Add("Error sending notification: " + ex.Message);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+
+    public class NotificationModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public List<long> SelectedRoles { get; set; } = new();
+    }
+}
+
+

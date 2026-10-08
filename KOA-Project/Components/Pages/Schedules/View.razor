@@ -1,0 +1,145 @@
+﻿@page "/schedules/view/{DateStr}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "schedules")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>View Schedule - Knights of the Altar</PageTitle>
+
+<div class="space-y-6 max-w-5xl mx-auto">
+    <div class="flex items-center">
+        <a href="/schedules" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 mr-3 transition-colors">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">View Schedule</h1>
+            <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Assigned members for the week of @_weekStart.ToString("MMM dd, yyyy")</p>
+        </div>
+    </div>
+
+    <!-- Sunday Schedules -->
+    @if (_sundaySchedules.Any())
+    {
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 bg-yellow-50/50">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Sunday Masses</h3>
+            </div>
+            
+            @foreach (var sched in _sundaySchedules)
+            {
+                <div class="p-6 border-b border-gray-100 last:border-0">
+                    <div class="mb-4">
+                        <h4 class="font-bold text-lg text-gray-900">@sched.MassName</h4>
+                        <p class="text-sm text-gray-500">@sched.MassDate.ToString("MMM dd, yyyy") at @sched.MassTime.ToString("h:mm tt")</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach (var sm in sched.ScheduleMembers)
+                        {
+                            <div class="flex items-center gap-3 p-3 border border-gray-100 rounded-lg bg-gray-50/50">
+                                <div class="bg-[#246b9c] text-white font-bold rounded-full w-8 h-8 flex items-center justify-center text-xs shrink-0">
+                                    @sm.Member.Initials
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-gray-900 text-sm">@sm.Member.LastName, @sm.Member.FirstName</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (!sched.ScheduleMembers.Any())
+                    {
+                        <p class="text-sm text-gray-400 italic">No members assigned.</p>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Weekday Schedules -->
+    @if (_weekdaySchedules.Any())
+    {
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 bg-[#246b9c]/5">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Weekday Masses</h3>
+            </div>
+            
+            @foreach (var sched in _weekdaySchedules)
+            {
+                <div class="p-6 border-b border-gray-100 last:border-0">
+                    <div class="mb-4">
+                        <h4 class="font-bold text-lg text-gray-900">@sched.Day (@sched.MassType)</h4>
+                        <p class="text-sm text-gray-500">@sched.MassTime.ToString("h:mm tt")</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach (var sm in sched.ScheduleMembers)
+                        {
+                            <div class="flex items-center gap-3 p-3 border border-gray-100 rounded-lg bg-gray-50/50">
+                                <div class="bg-[#246b9c] text-white font-bold rounded-full w-8 h-8 flex items-center justify-center text-xs shrink-0">
+                                    @sm.Member.Initials
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-gray-900 text-sm">@sm.Member.LastName, @sm.Member.FirstName</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (!sched.ScheduleMembers.Any())
+                    {
+                        <p class="text-sm text-gray-400 italic">No members assigned.</p>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string DateStr { get; set; } = string.Empty;
+
+    private DateOnly _weekStart;
+
+    private List<ScheduleSunday> _sundaySchedules = new();
+    private List<ScheduleWeekday> _weekdaySchedules = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (DateOnly.TryParse(DateStr, out var d))
+        {
+            _weekStart = d;
+        }
+        else
+        {
+            Nav.NavigateTo("/schedules");
+            return;
+        }
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        var weekEnd = _weekStart.AddDays(6);
+
+        _sundaySchedules = await db.ScheduleSundays
+            .Include(s => s.ScheduleMembers)
+            .ThenInclude(sm => sm.Member)
+            .Where(s => s.MassDate >= _weekStart && s.MassDate <= weekEnd)
+            .OrderBy(s => s.MassDate).ThenBy(s => s.MassTime)
+            .ToListAsync();
+
+        _weekdaySchedules = await db.ScheduleWeekdays
+            .Include(s => s.ScheduleMembers)
+            .ThenInclude(sm => sm.Member)
+            .Where(s => s.WeekStart == _weekStart)
+            .OrderBy(s => s.MassTime)
+            .ToListAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+}
+

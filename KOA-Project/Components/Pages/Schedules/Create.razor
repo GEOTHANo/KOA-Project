@@ -1,0 +1,391 @@
+﻿@page "/schedules/create"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "schedules.create")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Create Schedule - Knights of the Altar</PageTitle>
+
+<div class="space-y-6 max-w-7xl mx-auto">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center">
+            <a href="/schedules" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 mr-3 transition-colors">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Create Schedule</h1>
+                <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Assign members to weekday and Sunday masses for the week.</p>
+            </div>
+        </div>
+        <button type="button" @onclick="HandleSubmit" class="px-6 py-2.5 text-sm font-semibold text-white bg-[#246b9c] hover:bg-[#1a547b] rounded-lg transition-colors shadow-sm flex items-center">
+            <i data-lucide="save" class="w-4 h-4 mr-2"></i> Save Schedule
+        </button>
+    </div>
+
+    @if (_errors.Any())
+    {
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <ul class="list-disc list-inside">
+                @foreach (var error in _errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <!-- Week Selection -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-4 pb-2 border-b border-gray-100 dark:border-slate-700">Select Week</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Week Start (Saturday) <span class="text-red-500">*</span></label>
+                <input type="date" @bind="_weekStart" @bind:after="OnWeekStartChanged" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] focus:border-[#246b9c] outline-none" />
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Week End (Friday) <span class="text-red-500">*</span></label>
+                <input type="date" @bind="_weekEnd" disabled class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-500 outline-none" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Sunday Masses Assignment -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-4 pb-2 border-b border-gray-100 dark:border-slate-700">Sunday Mass Assignments</h3>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            @if (!_sundayMasses.Any())
+            {
+                <p class="text-gray-400 text-sm py-4">No Sunday masses configured.</p>
+            }
+            @foreach (var mass in _sundayMasses)
+            {
+                <div class="border border-gray-200 rounded-xl bg-white overflow-hidden flex flex-col h-[500px]">
+                    <div class="bg-yellow-50/50 border-b border-yellow-100 p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-gray-800 dark:text-white">@mass.MassName</h4>
+                                <p class="text-xs text-gray-500 font-medium"><i data-lucide="clock" class="w-3 h-3 inline mr-1"></i>@mass.MassTime.ToString("h:mm tt")</p>
+                            </div>
+                            <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-bold">@(_sundaySelections.TryGetValue(mass.Id, out var s) ? s.Count : 0) Assigned</span>
+                        </div>
+                    </div>
+                    
+                    <div class="p-3 border-b border-gray-100 bg-gray-50">
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-lucide="search" class="h-4 w-4 text-gray-400"></i>
+                            </div>
+                            <input type="text" @bind="_sundaySearch[mass.Id]" @bind:event="oninput" placeholder="Search by name or role..." class="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-2 space-y-2">
+                        @foreach (var member in GetFilteredMembers(_sundaySearch.GetValueOrDefault(mass.Id)))
+                        {
+                            bool isSelected = _sundaySelections.TryGetValue(mass.Id, out var sel) && sel.Contains(member.Member.Id);
+                            bool isPresent = member.IsPresent;
+                            
+                            <div @onclick="() => ToggleSundayMember(mass.Id, member.Member.Id)" 
+                                 class="cursor-pointer border rounded-lg p-3 transition-colors flex items-center justify-between 
+                                        @(isSelected ? "border-[#246b9c] bg-[#246b9c]/5" : "border-gray-200 hover:border-[#246b9c]/50")">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase text-gray-500">@member.Role</p>
+                                    <p class="font-medium text-gray-900 mt-0.5">@member.Member.LastName, @member.Member.FirstName</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    @if (isPresent)
+                                    {
+                                        <span class="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Present</span>
+                                    }
+                                    <div class="w-5 h-5 rounded border flex items-center justify-center @(isSelected ? "bg-[#246b9c] border-[#246b9c]" : "border-gray-300")">
+                                        @if (isSelected) { <i data-lucide="check" class="w-3 h-3 text-white"></i> }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Weekday Masses Assignment -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-4 pb-2 border-b border-gray-100 dark:border-slate-700">Weekday Mass Assignments</h3>
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            @if (!_weekdayMasses.Any())
+            {
+                <p class="text-gray-400 text-sm py-4">No weekday masses configured.</p>
+            }
+            @foreach (var mass in _weekdayMasses)
+            {
+                <div class="border border-gray-200 rounded-xl bg-white overflow-hidden flex flex-col h-[400px]">
+                    <div class="bg-[#246b9c]/5 border-b border-[#246b9c]/20 p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-gray-800 dark:text-white">@mass.Day</h4>
+                                <p class="text-xs text-gray-500 font-medium">@mass.MassType â€¢ <i data-lucide="clock" class="w-3 h-3 inline mx-1"></i>@mass.MassTime.ToString("h:mm tt")</p>
+                            </div>
+                            <span class="text-xs bg-[#246b9c]/10 text-[#246b9c] px-2 py-1 rounded-full font-bold">@(_weekdaySelections.TryGetValue(mass.Id, out var s) ? s.Count : 0) Assigned</span>
+                        </div>
+                    </div>
+                    
+                    <div class="p-3 border-b border-gray-100 bg-gray-50">
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-lucide="search" class="h-4 w-4 text-gray-400"></i>
+                            </div>
+                            <input type="text" @bind="_weekdaySearch[mass.Id]" @bind:event="oninput" placeholder="Search name/role..." class="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-2 space-y-2">
+                        @foreach (var member in GetFilteredMembers(_weekdaySearch.GetValueOrDefault(mass.Id)))
+                        {
+                            bool isSelected = _weekdaySelections.TryGetValue(mass.Id, out var sel) && sel.Contains(member.Member.Id);
+                            bool isPresent = member.IsPresent;
+                            
+                            <div @onclick="() => ToggleWeekdayMember(mass.Id, member.Member.Id)" 
+                                 class="cursor-pointer border rounded-lg p-3 transition-colors flex items-center justify-between 
+                                        @(isSelected ? "border-[#246b9c] bg-[#246b9c]/5" : "border-gray-200 hover:border-[#246b9c]/50")">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase text-gray-500">@member.Role</p>
+                                    <p class="font-medium text-gray-900 mt-0.5">@member.Member.LastName, @member.Member.FirstName</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    @if (isPresent)
+                                    {
+                                        <span class="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Present</span>
+                                    }
+                                    <div class="w-5 h-5 rounded border flex items-center justify-center @(isSelected ? "bg-[#246b9c] border-[#246b9c]" : "border-gray-300")">
+                                        @if (isSelected) { <i data-lucide="check" class="w-3 h-3 text-white"></i> }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateOnly _weekStart;
+    private DateOnly _weekEnd;
+    
+    public class MemberViewModel
+    {
+        public Member Member { get; set; } = null!;
+        public string Role { get; set; } = string.Empty;
+        public bool IsPresent { get; set; }
+    }
+    
+    private List<MemberViewModel> _eligibleMembers = new();
+    private List<MassSunday> _sundayMasses = new();
+    private List<MassWeekday> _weekdayMasses = new();
+    
+    private Dictionary<long, List<long>> _sundaySelections = new();
+    private Dictionary<long, List<long>> _weekdaySelections = new();
+    
+    private Dictionary<long, string> _sundaySearch = new();
+    private Dictionary<long, string> _weekdaySearch = new();
+    
+    private List<string> _errors = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateTime.Today;
+        int daysUntilSaturday = ((int)DayOfWeek.Saturday - (int)today.DayOfWeek + 7) % 7;
+        if (daysUntilSaturday == 0) daysUntilSaturday = 7;
+        
+        _weekStart = DateOnly.FromDateTime(today.AddDays(daysUntilSaturday));
+        _weekEnd = _weekStart.AddDays(6);
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        // Fetch latest attendance to highlight present members
+        var latestAttendanceDate = await db.Attendances.MaxAsync(a => (DateOnly?)a.AttendanceDate);
+        var presentMemberIds = new HashSet<long>();
+        if (latestAttendanceDate.HasValue)
+        {
+            var presentRecords = await db.Attendances
+                .Where(a => a.AttendanceDate == latestAttendanceDate.Value && a.Status == "Present")
+                .Select(a => a.MemberId)
+                .ToListAsync();
+            foreach (var id in presentRecords) presentMemberIds.Add(id);
+        }
+
+        var activeMembers = await db.Members
+            .Include(m => m.MemberPositions.Where(mp => mp.IsCurrent))
+            .ThenInclude(mp => mp.Position)
+            .Where(m => m.Status == "Active")
+            .ToListAsync();
+            
+        // Map to ViewModel and Sort: Present first, then alphabetical
+        _eligibleMembers = activeMembers.Select(m => new MemberViewModel
+        {
+            Member = m,
+            Role = m.MemberPositions.FirstOrDefault()?.Position?.PositionName ?? "Member",
+            IsPresent = presentMemberIds.Contains(m.Id)
+        })
+        .OrderByDescending(m => m.IsPresent)
+        .ThenBy(m => m.Member.LastName)
+        .ThenBy(m => m.Member.FirstName)
+        .ToList();
+            
+        _sundayMasses = await db.MassSundays.Where(m => m.Status == "Active").ToListAsync();
+        _weekdayMasses = await db.MassWeekdays.Where(m => m.Status == "Active").ToListAsync();
+        
+        foreach (var m in _sundayMasses) 
+        {
+            _sundaySelections[m.Id] = new List<long>();
+            _sundaySearch[m.Id] = "";
+        }
+        foreach (var m in _weekdayMasses) 
+        {
+            _weekdaySelections[m.Id] = new List<long>();
+            _weekdaySearch[m.Id] = "";
+        }
+    }
+    
+    private IEnumerable<MemberViewModel> GetFilteredMembers(string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return _eligibleMembers;
+        return _eligibleMembers.Where(m => 
+            m.Member.FullName.Contains(search, StringComparison.OrdinalIgnoreCase) || 
+            m.Role.Contains(search, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void OnWeekStartChanged()
+    {
+        _weekEnd = _weekStart.AddDays(6);
+    }
+
+    private void ToggleSundayMember(long massId, long memberId)
+    {
+        if (!_sundaySelections.ContainsKey(massId)) _sundaySelections[massId] = new();
+        if (_sundaySelections[massId].Contains(memberId))
+            _sundaySelections[massId].Remove(memberId);
+        else
+            _sundaySelections[massId].Add(memberId);
+    }
+
+    private void ToggleWeekdayMember(long massId, long memberId)
+    {
+        if (!_weekdaySelections.ContainsKey(massId)) _weekdaySelections[massId] = new();
+        if (_weekdaySelections[massId].Contains(memberId))
+            _weekdaySelections[massId].Remove(memberId);
+        else
+            _weekdaySelections[massId].Add(memberId);
+    }
+
+    private async Task HandleSubmit()
+    {
+        _errors.Clear();
+
+        if (_weekStart.DayOfWeek != DayOfWeek.Saturday)
+        {
+            _errors.Add("Week start must be a Saturday.");
+            return;
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var sundayDate = _weekStart.AddDays(1); // Sunday
+
+            // Save Sunday Schedules
+            foreach (var mass in _sundayMasses)
+            {
+                if (_sundaySelections.TryGetValue(mass.Id, out var selectedIds))
+                {
+                    var sched = new ScheduleSunday
+                    {
+                        MassDate = sundayDate,
+                        MassName = mass.MassName,
+                        MassTime = mass.MassTime,
+                        Status = "not checked",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    db.ScheduleSundays.Add(sched);
+                    await db.SaveChangesAsync(); // Get ID
+
+                    foreach (var mId in selectedIds)
+                    {
+                        db.SundayScheduleMembers.Add(new SundayScheduleMember
+                        {
+                            SundayScheduleId = sched.Id,
+                            MemberId = mId,
+                            AssignedDate = sundayDate,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+            }
+
+            // Save Weekday Schedules
+            var daysMap = new Dictionary<string, int>
+            {
+                ["Monday"] = 2, ["Tuesday"] = 3, ["Wednesday"] = 4,
+                ["Thursday"] = 5, ["Friday"] = 6, ["Saturday"] = 0
+            };
+
+            foreach (var mass in _weekdayMasses)
+            {
+                if (_weekdaySelections.TryGetValue(mass.Id, out var selectedIds))
+                {
+                    var sched = new ScheduleWeekday
+                    {
+                        WeekStart = _weekStart,
+                        WeekEnd = _weekEnd,
+                        Day = mass.Day,
+                        MassType = mass.MassType,
+                        MassTime = mass.MassTime,
+                        Status = "not checked",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    db.ScheduleWeekdays.Add(sched);
+                    await db.SaveChangesAsync();
+
+                    if (daysMap.TryGetValue(mass.Day, out int daysAdd))
+                    {
+                        var massDate = _weekStart.AddDays(daysAdd);
+                        foreach (var mId in selectedIds)
+                        {
+                            db.WeekdayScheduleMembers.Add(new WeekdayScheduleMember
+                            {
+                                WeekdayScheduleId = sched.Id,
+                                MemberId = mId,
+                                AssignedDate = massDate,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+            }
+
+            await db.SaveChangesAsync();
+            Nav.NavigateTo("/schedules?success=Schedule created successfully.");
+        }
+        catch (Exception ex)
+        {
+            _errors.Add("Error saving schedule: " + ex.Message);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+}
+

@@ -1,0 +1,162 @@
+﻿@page "/members/{Id:long}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "members")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Member Details - Knights of the Altar</PageTitle>
+
+@if (_member == null)
+{
+    <div class="flex items-center justify-center py-16 text-gray-400 dark:text-slate-500">
+        <i data-lucide="loader-2" class="w-6 h-6 animate-spin mr-2"></i> Loading member details...
+    </div>
+}
+else
+{
+<div class="space-y-6 max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex items-center">
+            <a href="/members" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 mr-3 transition-colors">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-white">@_member.FullName</h1>
+                <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Member Profile & QR Code</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2 self-start sm:self-auto">
+            <a href="/members/@_member.Id/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center transition-colors shadow-sm">
+                <i data-lucide="pencil" class="w-4 h-4 mr-2"></i> Edit Member
+            </a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i> @_successMessage
+        </div>
+    }
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Profile Card & QR -->
+        <div class="space-y-6">
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6 text-center">
+                <div class="bg-[#246b9c] text-white font-bold rounded-full w-20 h-20 flex items-center justify-center mx-auto text-2xl shadow-sm">
+                    @_member.Initials
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 dark:text-white mt-4">@_member.FullName</h3>
+                <p class="text-sm text-gray-500 dark:text-slate-400">@@@_member.Username</p>
+                <div class="mt-3">
+                    @{
+                        var isAct = _member.Status == "Active";
+                    }
+                    <span class="inline-block @(isAct ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800" : "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800") border text-xs px-3 py-1 rounded-full font-medium">
+                        @_member.Status
+                    </span>
+                </div>
+                <div class="mt-4 space-y-1 flex flex-wrap justify-center gap-1">
+                    @foreach (var pos in _member.MemberPositions.Where(mp => mp.IsCurrent))
+                    {
+                        <span class="inline-block bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs px-2.5 py-0.5 rounded-md font-medium">
+                            @(pos.Position?.PositionName ?? "Member")
+                        </span>
+                    }
+                </div>
+            </div>
+
+            <!-- Member QR Code Canvas Card -->
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 text-center flex flex-col items-center">
+                <h4 class="text-xs font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <i data-lucide="qr-code" class="w-4 h-4 text-[#246b9c] dark:text-blue-400"></i> Attendance QR Code
+                </h4>
+                <div class="p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl mb-3 flex items-center justify-center">
+                    <canvas id="qr-member-show" class="rounded-lg shadow-sm"></canvas>
+                </div>
+                <p class="text-[11px] text-gray-400 dark:text-slate-500 mb-3">ID: KOA-MEMBER-@_member.Id</p>
+                <button @onclick="DownloadQR" class="bg-[#246b9c] hover:bg-[#1a547b] text-white text-xs font-semibold px-4 py-2 rounded-xl inline-flex items-center gap-1.5 transition-colors shadow-sm">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Download PNG
+                </button>
+            </div>
+        </div>
+
+        <!-- Details -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Personal Info -->
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-4 pb-2 border-b border-gray-100 dark:border-slate-700 flex items-center gap-2">
+                    <i data-lucide="user" class="w-4 h-4 text-[#246b9c] dark:text-blue-400"></i> Personal Information
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                    <div><span class="text-gray-500 dark:text-slate-400">First Name</span><p class="font-medium text-gray-800 dark:text-white mt-0.5">@_member.FirstName</p></div>
+                    <div><span class="text-gray-500 dark:text-slate-400">Middle Name</span><p class="font-medium text-gray-800 dark:text-white mt-0.5">@(_member.MiddleName ?? "-")</p></div>
+                    <div><span class="text-gray-500 dark:text-slate-400">Last Name</span><p class="font-medium text-gray-800 dark:text-white mt-0.5">@_member.LastName</p></div>
+                    <div><span class="text-gray-500 dark:text-slate-400">Contact Number</span><p class="font-medium text-gray-800 dark:text-white mt-0.5">@(_member.ContactNumber ?? "-")</p></div>
+                    <div><span class="text-gray-500 dark:text-slate-400">Birthday</span><p class="font-medium text-gray-800 dark:text-white mt-0.5">@(_member.BirthDate?.ToString("MMMM dd, yyyy") ?? "-")</p></div>
+                    <div><span class="text-gray-500 dark:text-slate-400">System Member ID</span><p class="font-medium text-gray-800 dark:text-white mt-0.5">#@_member.Id</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+}
+
+@code {
+    [Parameter] public long Id { get; set; }
+    
+    private Member? _member;
+    private string? _successMessage;
+    private bool _qrRendered = false;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("success", out var sm))
+        {
+            _successMessage = sm;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        _member = await db.Members
+            .Include(m => m.MemberPositions)
+            .ThenInclude(mp => mp.Position)
+            .FirstOrDefaultAsync(m => m.Id == Id);
+
+        if (_member == null)
+        {
+            Nav.NavigateTo("/members");
+            return;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try { await JS.InvokeVoidAsync("initLucide"); } catch { }
+
+        if (_member != null && !_qrRendered)
+        {
+            _qrRendered = true;
+            try
+            {
+                await JS.InvokeVoidAsync("renderMemberQR", "qr-member-show", $"KOA-MEMBER-{_member.Id}");
+            }
+            catch { }
+        }
+    }
+
+    private async Task DownloadQR()
+    {
+        if (_member != null)
+        {
+            try { await JS.InvokeVoidAsync("downloadMemberQR", "qr-member-show", _member.FullName.Replace(" ", "_")); }
+            catch { }
+        }
+    }
+}

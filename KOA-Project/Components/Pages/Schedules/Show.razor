@@ -1,0 +1,207 @@
+﻿@page "/schedules/{WeekStartStr}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "schedules")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject AuthService AuthService
+
+<PageTitle>Schedule Details - Knights of the Altar</PageTitle>
+
+@if (!_isLoaded)
+{
+    <p>Loading...</p>
+}
+else
+{
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex items-center">
+            <a href="/schedules" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 mr-3 transition-colors">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Schedule Details</h1>
+                <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Week of @_weekStart.ToString("MMM dd, yyyy")</p>
+            </div>
+        </div>
+        <div class="flex items-center self-start sm:self-auto">
+            @if (_isChecked)
+            {
+                <span class="inline-flex items-center bg-green-50 text-green-700 text-sm px-3 py-1.5 rounded-full font-medium">
+                    <i data-lucide="check-circle" class="w-4 h-4 mr-2"></i> Checked
+                </span>
+            }
+            else
+            {
+                <span class="inline-flex items-center bg-yellow-50 text-yellow-700 text-sm px-3 py-1.5 rounded-full font-medium">
+                    <i data-lucide="clock" class="w-4 h-4 mr-2"></i> Not Checked
+                </span>
+                <AuthorizeView Policy="schedules.create">
+                    <Authorized>
+                        <a href="/schedules/check?week=@_weekStart.ToString("yyyy-MM-dd")" class="ml-3 text-sm text-[#246b9c] hover:underline font-medium">Check Now</a>
+                    </Authorized>
+                </AuthorizeView>
+            }
+        </div>
+    </div>
+
+    <!-- Sunday Masses -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">Sunday Masses</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            @if (!_sundaySchedules.Any())
+            {
+                <p class="text-gray-400 text-sm py-4">No Sunday schedule for this week.</p>
+            }
+            @foreach (var schedule in _sundaySchedules)
+            {
+                <div class="border border-yellow-100 rounded-lg overflow-hidden bg-yellow-50/10">
+                    <div class="bg-yellow-50 px-4 py-3 border-b border-yellow-100 flex items-center justify-between">
+                        <div class="font-semibold text-gray-800 dark:text-white">@schedule.MassName</div>
+                        <div class="text-xs text-gray-500">@schedule.MassTime.ToString("h:mm tt")</div>
+                    </div>
+                    <div class="p-4">
+                        <ul class="space-y-2">
+                            @if (!schedule.ScheduleMembers.Any())
+                            {
+                                <li class="text-sm text-gray-400 italic">No members assigned.</li>
+                            }
+                            @foreach (var member in schedule.ScheduleMembers)
+                            {
+                                <li class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700">@member.Member.LastName, @member.Member.FirstName</span>
+                                    @if (_isChecked)
+                                    {
+                                        if (member.AttendanceStatus == "Present")
+                                        {
+                                            <span class="text-xs text-green-600 font-medium">Present</span>
+                                        }
+                                        else if (member.AttendanceStatus == "Absent")
+                                        {
+                                            <span class="text-xs text-red-500 font-medium">Absent</span>
+                                        }
+                                        else if (member.AttendanceStatus == "Excused")
+                                        {
+                                            <span class="text-xs text-yellow-600 font-medium">Excused</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-xs text-gray-400 font-medium">â€”</span>
+                                        }
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Weekday Masses -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">Weekday Masses</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            @if (!_weekdaySchedules.Any())
+            {
+                <p class="text-gray-400 text-sm py-4">No weekday schedule for this week.</p>
+            }
+            @foreach (var schedule in _weekdaySchedules)
+            {
+                <div class="border border-gray-100 rounded-lg overflow-hidden bg-gray-50/30">
+                    <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                        <div class="font-semibold text-gray-800 dark:text-white">@schedule.Day</div>
+                        <div class="text-xs text-gray-500">@schedule.MassType â€¢ @schedule.MassTime.ToString("h:mm tt")</div>
+                    </div>
+                    <div class="p-4">
+                        <ul class="space-y-2">
+                            @if (!schedule.ScheduleMembers.Any())
+                            {
+                                <li class="text-sm text-gray-400 italic">No members assigned.</li>
+                            }
+                            @foreach (var member in schedule.ScheduleMembers)
+                            {
+                                <li class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700">@member.Member.LastName, @member.Member.FirstName</span>
+                                    @if (_isChecked)
+                                    {
+                                        if (member.AttendanceStatus == "Present")
+                                        {
+                                            <span class="text-xs text-green-600 font-medium">Present</span>
+                                        }
+                                        else if (member.AttendanceStatus == "Absent")
+                                        {
+                                            <span class="text-xs text-red-500 font-medium">Absent</span>
+                                        }
+                                        else if (member.AttendanceStatus == "Excused")
+                                        {
+                                            <span class="text-xs text-yellow-600 font-medium">Excused</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-xs text-gray-400 font-medium">â€”</span>
+                                        }
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+}
+
+@code {
+    [Parameter] public string WeekStartStr { get; set; } = string.Empty;
+    
+    private DateOnly _weekStart;
+    private DateOnly _weekEnd;
+    private bool _isChecked;
+    private bool _isLoaded;
+
+    private List<ScheduleWeekday> _weekdaySchedules = new();
+    private List<ScheduleSunday> _sundaySchedules = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!DateOnly.TryParse(WeekStartStr, out _weekStart))
+        {
+            Nav.NavigateTo("/schedules");
+            return;
+        }
+
+        _weekEnd = _weekStart.AddDays(6);
+
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        _weekdaySchedules = await db.ScheduleWeekdays
+            .Include(s => s.ScheduleMembers)
+                .ThenInclude(sm => sm.Member)
+            .Where(s => s.WeekStart == _weekStart)
+            .ToListAsync();
+
+        _sundaySchedules = await db.ScheduleSundays
+            .Include(s => s.ScheduleMembers)
+                .ThenInclude(sm => sm.Member)
+            .Where(s => s.MassDate >= _weekStart && s.MassDate <= _weekEnd)
+            .ToListAsync();
+
+        var wChecked = _weekdaySchedules.All(w => w.Status == "checked") && _weekdaySchedules.Any();
+        var sChecked = _sundaySchedules.All(s => s.Status == "checked") && _sundaySchedules.Any();
+        
+        _isChecked = (wChecked || sChecked) && (_weekdaySchedules.All(w => w.Status == "checked") && _sundaySchedules.All(s => s.Status == "checked"));
+        
+        _isLoaded = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+}
+

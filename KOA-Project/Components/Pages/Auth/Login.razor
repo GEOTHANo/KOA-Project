@@ -1,0 +1,155 @@
+@page "/login"
+@layout EmptyLayout
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Member Portal Login - Knights of the Altar</PageTitle>
+
+<div class="flex min-h-screen font-sans bg-slate-950 text-slate-100">
+    <!-- Left Side (Vatican & KOA Brand Panel) -->
+    <div class="hidden lg:flex lg:w-3/5 bg-gradient-to-br from-slate-950 via-[#163f5c] to-slate-950 relative flex-col items-center justify-center p-12 overflow-hidden border-r border-slate-800">
+        <!-- Ambient Glowing Background Orbs -->
+        <div class="absolute top-12 left-12 w-48 h-48 bg-[#246b9c]/20 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute bottom-12 right-12 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="relative z-10 flex flex-col items-center text-center text-white max-w-lg space-y-6">
+            <div class="w-28 h-28 bg-white rounded-3xl p-1 shadow-2xl flex items-center justify-center overflow-hidden border-2 border-slate-700/50 transform hover:scale-105 transition-transform duration-300">
+                <img src="/images/koa-logo.jpg" alt="KOA Logo" class="w-full h-full object-cover rounded-2xl" />
+            </div>
+
+            <div>
+                <h1 class="text-4xl font-extrabold tracking-tight text-white">Knights of the Altar</h1>
+                <p class="text-xs font-bold text-amber-400 tracking-widest uppercase mt-1">STO. ROSARIO PARISH &bull; TORIL</p>
+            </div>
+
+            <p class="text-xs text-slate-300 max-w-md leading-relaxed">
+                Official Ministry System for Mass Duty Scheduling, Digital Attendance Tracking, and Liturgical Calendar Integration.
+            </p>
+
+            <a href="/register"
+               class="inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-7 py-3 rounded-2xl font-bold text-xs shadow-lg shadow-amber-500/20 transition-all duration-200 transform hover:-translate-y-0.5 border border-amber-400/30">
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                <span>Register as New Member &rarr;</span>
+            </a>
+
+            <!-- Liturgical Calendar Card Widget -->
+            <div class="w-full max-w-md text-left shadow-2xl rounded-2xl overflow-hidden border border-slate-700/80 bg-slate-900/90 backdrop-blur-md">
+                <KOA_Project.Components.Shared.LiturgicalCard />
+            </div>
+
+            <p class="text-xs text-slate-400 font-medium italic">"Ave Maria, Gratia Plena"</p>
+        </div>
+    </div>
+
+    <!-- Right Side (Login Form Panel) -->
+    <div class="w-full lg:w-2/5 flex flex-col items-center justify-center p-8 sm:p-12 lg:p-16 bg-white text-slate-900 relative">
+        <!-- Back to Landing Page Navigation Button -->
+        <div class="w-full max-w-sm mb-6 flex items-center justify-between">
+            <a href="/" class="inline-flex items-center space-x-2 text-xs font-bold text-[#246b9c] hover:text-[#194c70] transition-all bg-blue-50/80 hover:bg-blue-100/80 px-3.5 py-2 rounded-xl border border-blue-100 group shadow-sm">
+                <svg class="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                <span>&larr; Back to Landing Page</span>
+            </a>
+
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Portal Login</span>
+        </div>
+
+        <div class="w-full max-w-sm">
+            <!-- Mobile Logo -->
+            <div class="lg:hidden flex justify-center mb-6">
+                <div class="w-20 h-20 bg-white rounded-2xl p-1 shadow-md flex items-center justify-center overflow-hidden border border-gray-200">
+                    <img src="/images/koa-logo.jpg" alt="KOA Logo" class="w-full h-full object-cover rounded-xl" />
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <div class="inline-flex items-center space-x-2 px-3 py-1 bg-slate-100 rounded-lg text-slate-600 text-xs font-bold mb-3">
+                    <svg class="w-3.5 h-3.5 text-[#246b9c]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    <span>Member Sign In</span>
+                </div>
+                <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Welcome Back</h2>
+                <p class="text-xs text-slate-500 mt-1">Sign in to your KOA account to access mass schedules and attendance tools.</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-xs font-medium flex items-center space-x-2">
+                    <svg class="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>@ErrorMessage</span>
+                </div>
+            }
+
+            <form action="/auth/login" method="post" data-enhance-nav="false" class="space-y-5">
+                <div>
+                    <label for="username" class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Username</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <i data-lucide="user" class="h-4 w-4 text-slate-400"></i>
+                        </div>
+                        <input id="username" name="username" required
+                               class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] focus:border-[#246b9c] focus:bg-white outline-none transition-all placeholder-slate-400 text-slate-900 font-medium"
+                               placeholder="Enter your username" autocomplete="username" />
+                    </div>
+                </div>
+
+                <div>
+                    <label for="password" class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Password</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <i data-lucide="lock" class="h-4 w-4 text-slate-400"></i>
+                        </div>
+                        <input id="password" name="password" required type="password"
+                               class="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#246b9c] focus:border-[#246b9c] focus:bg-white outline-none transition-all placeholder-slate-400 text-slate-900 font-medium"
+                               placeholder="Enter your password" autocomplete="current-password" />
+                        <button type="button" onclick="togglePassword()"
+                                class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none">
+                            <i id="eyeIcon" data-lucide="eye" class="h-4 w-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="g-recaptcha" data-sitekey="6LfIilgtAAAAAM0qeO6RiBa-ZSqlJhKaqAIg5tlt"></div>
+
+                <button type="submit"
+                        class="w-full bg-[#246b9c] hover:bg-[#1a547b] text-white font-bold py-3.5 rounded-xl transition-all duration-200 shadow-md shadow-[#246b9c]/20 hover:shadow-lg hover:shadow-[#246b9c]/35 transform hover:-translate-y-0.5 mt-2">
+                    Sign In to System
+                </button>
+                            <div class="mt-3 text-center">
+                    <a href="/register" class="text-xs text-[#246b9c] hover:underline font-bold">New Member? Register here &rarr;</a>
+                </div>
+            </form>
+
+            <div class="mt-8 pt-6 border-t border-slate-100 text-center">
+                <p class="text-xs text-slate-400">Sto. Rosario Parish &bull; Knights of the Altar Ministry</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<script>
+    function togglePassword() {
+        const passInput = document.getElementById('password');
+        const eyeIcon = document.getElementById('eyeIcon');
+        if (passInput.type === 'password') {
+            passInput.type = 'text';
+            eyeIcon.setAttribute('data-lucide', 'eye-off');
+        } else {
+            passInput.type = 'password';
+            eyeIcon.setAttribute('data-lucide', 'eye');
+        }
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+</script>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? ErrorMessage { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+    }
+}

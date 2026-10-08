@@ -1,0 +1,265 @@
+﻿@page "/schedules/check/{DateStr}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "schedules")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Check Schedule - Knights of the Altar</PageTitle>
+
+<div class="space-y-6 max-w-5xl mx-auto">
+    <div class="flex items-center">
+        <a href="/schedules" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 mr-3 transition-colors">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Check Schedule Attendance</h1>
+            <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Mark members as Present or Absent for the week of @_weekStart.ToString("MMM dd, yyyy")</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">@_errorMessage</div>
+    }
+
+    <EditForm Model="this" OnValidSubmit="HandleSubmit" class="space-y-6">
+        
+        <!-- Sunday Schedules -->
+        @if (_sundaySchedules.Any())
+        {
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 bg-yellow-50/50">
+                    <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Sunday Masses</h3>
+                </div>
+                
+                @foreach (var sched in _sundaySchedules)
+                {
+                    <div class="p-6 border-b border-gray-100 last:border-0">
+                        <div class="mb-4">
+                            <h4 class="font-bold text-lg text-gray-900">@sched.MassName</h4>
+                            <p class="text-sm text-gray-500">@sched.MassDate.ToString("MMM dd, yyyy") at @sched.MassTime.ToString("h:mm tt")</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            @foreach (var sm in sched.ScheduleMembers)
+                            {
+                                <label class="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors @(_sundayChecks[sm.Id] ? "border-green-500 bg-green-50/30" : "")">
+                                    <div class="flex items-center gap-3">
+                                        <div class="bg-[#246b9c] text-white font-bold rounded-full w-8 h-8 flex items-center justify-center text-xs shrink-0">
+                                            @sm.Member.Initials
+                                        </div>
+                                        <div>
+                                            <p class="font-semibold text-gray-900 text-sm">@sm.Member.LastName, @sm.Member.FirstName</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-semibold @(_sundayChecks[sm.Id] ? "text-green-600" : "text-gray-400")">
+                                            @(_sundayChecks[sm.Id] ? "PRESENT" : "ABSENT")
+                                        </span>
+                                        <input type="checkbox" @bind="_sundayChecks[sm.Id]" class="w-5 h-5 text-green-600 rounded border-gray-300 focus:ring-green-500" />
+                                    </div>
+                                </label>
+                            }
+                        </div>
+                        @if (!sched.ScheduleMembers.Any())
+                        {
+                            <p class="text-sm text-gray-400 italic">No members assigned.</p>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Weekday Schedules -->
+        @if (_weekdaySchedules.Any())
+        {
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 bg-[#246b9c]/5">
+                    <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Weekday Masses</h3>
+                </div>
+                
+                @foreach (var sched in _weekdaySchedules)
+                {
+                    <div class="p-6 border-b border-gray-100 last:border-0">
+                        <div class="mb-4">
+                            <h4 class="font-bold text-lg text-gray-900">@sched.Day (@sched.MassType)</h4>
+                            <p class="text-sm text-gray-500">@sched.MassTime.ToString("h:mm tt")</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            @foreach (var sm in sched.ScheduleMembers)
+                            {
+                                <label class="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors @(_weekdayChecks[sm.Id] ? "border-green-500 bg-green-50/30" : "")">
+                                    <div class="flex items-center gap-3">
+                                        <div class="bg-[#246b9c] text-white font-bold rounded-full w-8 h-8 flex items-center justify-center text-xs shrink-0">
+                                            @sm.Member.Initials
+                                        </div>
+                                        <div>
+                                            <p class="font-semibold text-gray-900 text-sm">@sm.Member.LastName, @sm.Member.FirstName</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-semibold @(_weekdayChecks[sm.Id] ? "text-green-600" : "text-gray-400")">
+                                            @(_weekdayChecks[sm.Id] ? "PRESENT" : "ABSENT")
+                                        </span>
+                                        <input type="checkbox" @bind="_weekdayChecks[sm.Id]" class="w-5 h-5 text-green-600 rounded border-gray-300 focus:ring-green-500" />
+                                    </div>
+                                </label>
+                            }
+                        </div>
+                        @if (!sched.ScheduleMembers.Any())
+                        {
+                            <p class="text-sm text-gray-400 italic">No members assigned.</p>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+            <a href="/schedules" class="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</a>
+            <button type="submit" disabled="@_isSubmitting" class="px-6 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center">
+                @if (_isSubmitting)
+                {
+                    <i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i> <span>Saving...</span>
+                }
+                else
+                {
+                    <i data-lucide="check-square" class="w-4 h-4 mr-2"></i> <span>Submit Schedule Checks</span>
+                }
+            </button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    [Parameter]
+    public string DateStr { get; set; } = string.Empty;
+
+    private DateOnly _weekStart;
+    private string? _errorMessage;
+    private bool _isSubmitting = false;
+
+    private List<ScheduleSunday> _sundaySchedules = new();
+    private List<ScheduleWeekday> _weekdaySchedules = new();
+
+    private Dictionary<long, bool> _sundayChecks = new();
+    private Dictionary<long, bool> _weekdayChecks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (DateOnly.TryParse(DateStr, out var d))
+        {
+            _weekStart = d;
+        }
+        else
+        {
+            Nav.NavigateTo("/schedules");
+            return;
+        }
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        var weekEnd = _weekStart.AddDays(6);
+
+        _sundaySchedules = await db.ScheduleSundays
+            .Include(s => s.ScheduleMembers)
+            .ThenInclude(sm => sm.Member)
+            .Where(s => s.MassDate >= _weekStart && s.MassDate <= weekEnd)
+            .ToListAsync();
+
+        _weekdaySchedules = await db.ScheduleWeekdays
+            .Include(s => s.ScheduleMembers)
+            .ThenInclude(sm => sm.Member)
+            .Where(s => s.WeekStart == _weekStart)
+            .ToListAsync();
+
+        foreach (var s in _sundaySchedules)
+        {
+            foreach (var sm in s.ScheduleMembers)
+            {
+                // Default to true if already marked present, false otherwise
+                _sundayChecks[sm.Id] = sm.AttendanceStatus == "Present";
+            }
+        }
+
+        foreach (var w in _weekdaySchedules)
+        {
+            foreach (var sm in w.ScheduleMembers)
+            {
+                _weekdayChecks[sm.Id] = sm.AttendanceStatus == "Present";
+            }
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSubmitting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            
+            // Re-fetch to update
+            var ss = await db.ScheduleSundays
+                .Include(s => s.ScheduleMembers)
+                .Where(s => s.MassDate >= _weekStart && s.MassDate <= _weekStart.AddDays(6))
+                .ToListAsync();
+
+            var ws = await db.ScheduleWeekdays
+                .Include(s => s.ScheduleMembers)
+                .Where(s => s.WeekStart == _weekStart)
+                .ToListAsync();
+
+            foreach (var s in ss)
+            {
+                s.Status = "checked";
+                s.UpdatedAt = DateTime.UtcNow;
+                foreach (var sm in s.ScheduleMembers)
+                {
+                    if (_sundayChecks.TryGetValue(sm.Id, out bool isPresent))
+                    {
+                        sm.AttendanceStatus = isPresent ? "Present" : "Absent";
+                        sm.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+
+            foreach (var w in ws)
+            {
+                w.Status = "checked";
+                w.UpdatedAt = DateTime.UtcNow;
+                foreach (var sm in w.ScheduleMembers)
+                {
+                    if (_weekdayChecks.TryGetValue(sm.Id, out bool isPresent))
+                    {
+                        sm.AttendanceStatus = isPresent ? "Present" : "Absent";
+                        sm.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+
+            await db.SaveChangesAsync();
+            Nav.NavigateTo("/schedules?success=Schedule checked and recorded successfully.");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Error checking schedule: " + ex.Message;
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+}
+

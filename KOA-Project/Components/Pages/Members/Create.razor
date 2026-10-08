@@ -1,0 +1,263 @@
+﻿@page "/members/create"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "members")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Add Member - Knights of the Altar</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center">
+        <a href="/members" class="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-200 mr-3 transition-colors">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Add New Member</h1>
+            <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Fill in the details to register a new member.</p>
+        </div>
+    </div>
+
+    @if (_errors.Any())
+    {
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <ul class="list-disc list-inside">
+                @foreach (var error in _errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <EditForm Model="_model" OnValidSubmit="HandleSubmit" class="space-y-6">
+        <DataAnnotationsValidator />
+
+        <!-- Account Info Notification -->
+        <div class="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl p-4 text-sm flex items-start">
+            <i data-lucide="info" class="w-5 h-5 mr-3 shrink-0 text-blue-600 mt-0.5"></i>
+            <div>
+                <h4 class="font-bold">Credentials Auto-Generation</h4>
+                <p class="mt-1 text-blue-700">The username and password will be automatically generated. If the last name is unique, the username will be <strong>tol + lastname</strong>. If the last name already exists, it will be <strong>tol + lastname + firstname</strong>. The initial password will match the username.</p>
+            </div>
+        </div>
+
+        <!-- Personal Information -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+            <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-4 pb-2 border-b border-gray-100 dark:border-slate-700">Personal Information</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">First Name <span class="text-red-500">*</span></label>
+                    <InputText @bind-Value="_model.FirstName" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Middle Name</label>
+                    <InputText @bind-Value="_model.MiddleName" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Last Name <span class="text-red-500">*</span></label>
+                    <InputText @bind-Value="_model.LastName" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Contact Number</label>
+                    <InputText @bind-Value="_model.ContactNumber" placeholder="e.g. 09XX-XXX-XXXX" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Birthday</label>
+                    <InputDate @bind-Value="_model.BirthDate" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Status <span class="text-red-500">*</span></label>
+                    <InputSelect @bind-Value="_model.Status" class="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] outline-none">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Alumni">Alumni</option>
+                    </InputSelect>
+                </div>
+            </div>
+        </div>
+
+        <!-- Position -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+            <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-4 pb-2 border-b border-gray-100 dark:border-slate-700">Position</h3>
+            <div>
+                <InputSelect @bind-Value="_model.SelectedPositionId" class="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#246b9c] focus:border-[#246b9c] outline-none bg-white">
+                    <option value="">-- Select a Position --</option>
+                    @foreach (var position in _availablePositions)
+                    {
+                        <option value="@position.Id">@position.PositionName</option>
+                    }
+                </InputSelect>
+            </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="flex items-center justify-end space-x-3">
+            <a href="/members" class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</a>
+            <button type="submit" class="px-5 py-2.5 text-sm font-semibold text-white bg-[#246b9c] hover:bg-[#1a547b] rounded-lg transition-colors shadow-sm">Save Member</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private MemberCreateModel _model = new();
+    private List<Position> _availablePositions = new();
+    private List<string> _errors = new();
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+    private bool _isSecretaryOrAssistant = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        var authState = await AuthStateTask!;
+        var user = authState.User;
+        _isSecretaryOrAssistant = user.IsInRole("Secretary") || user.IsInRole("Assistant Secretary");
+        
+        if (_isSecretaryOrAssistant)
+        {
+            _availablePositions = await db.Positions.Where(p => p.PositionName == "Member").ToListAsync();
+        }
+        else
+        {
+            _availablePositions = await db.Positions.ToListAsync();
+        }
+        
+        _model.Status = "Active";
+        
+        var memberPos = _availablePositions.FirstOrDefault(p => p.PositionName == "Member" || p.PositionName.Equals("Member", StringComparison.OrdinalIgnoreCase));
+        if (memberPos != null)
+        {
+            _model.SelectedPositionId = memberPos.Id;
+        }
+    }
+
+
+    private async Task HandleSubmit()
+    {
+        _errors.Clear();
+
+        if (string.IsNullOrWhiteSpace(_model.FirstName) || string.IsNullOrWhiteSpace(_model.LastName))
+        {
+            _errors.Add("First Name and Last Name are required.");
+            return;
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            
+            var lastNameClean = _model.LastName.ToLower().Replace(" ", "").Trim();
+            var firstNameClean = _model.FirstName.ToLower().Replace(" ", "").Trim();
+
+            // Check if there is already ANY member in the database with the exact same last name
+            bool hasSameLastName = await db.Members.AnyAsync(m => m.LastName.ToLower().Replace(" ", "").Trim() == lastNameClean);
+
+            string baseUsername = "";
+            if (!hasSameLastName)
+            {
+                baseUsername = ("tol" + lastNameClean);
+            }
+            else
+            {
+                // Last name exists, partner it with the first name
+                baseUsername = ("tol" + lastNameClean + firstNameClean);
+            }
+
+            var username = baseUsername;
+            
+            // Ensure uniqueness in case the combined first + last name also exists
+            int counter = 1;
+            while (await db.Members.AnyAsync(m => m.Username == username))
+            {
+                username = $"{baseUsername}{counter}";
+                counter++;
+            }
+            
+            var password = BCrypt.Net.BCrypt.HashPassword(username);
+
+            var newMember = new KOA_Project.Models.Member
+            {
+                Username = username,
+                Password = password,
+                FirstName = _model.FirstName,
+                MiddleName = _model.MiddleName,
+                LastName = _model.LastName,
+                ContactNumber = _model.ContactNumber,
+                BirthDate = _model.BirthDate,
+                Status = _model.Status,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            db.Members.Add(newMember);
+            await db.SaveChangesAsync(); // Get ID
+
+            // Add positions
+            if (_model.SelectedPositionId.HasValue)
+            {
+                db.MemberPositions.Add(new MemberPosition
+                {
+                    MemberId = newMember.Id,
+                    PositionId = _model.SelectedPositionId.Value,
+                    DateAssigned = DateOnly.FromDateTime(DateTime.Now),
+                    IsCurrent = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                // Assign default Member role if no role selected
+                var memberPos = await db.Positions.FirstOrDefaultAsync(p => p.PositionName == "Member");
+                if (memberPos != null)
+                {
+                    db.MemberPositions.Add(new MemberPosition
+                    {
+                        MemberId = newMember.Id,
+                        PositionId = memberPos.Id,
+                        DateAssigned = DateOnly.FromDateTime(DateTime.Now),
+                        IsCurrent = true,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                    await db.SaveChangesAsync();
+                }
+            }
+
+                        
+
+            Nav.NavigateTo("/members?success=Member added successfully.");
+        }
+        catch (Exception ex)
+        {
+            _errors.Add("An error occurred while saving the member: " + ex.Message);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("initLucide"); } catch (Exception) { }
+        }
+    }
+
+    public class MemberCreateModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
+        public string LastName { get; set; } = string.Empty;
+        public string? ContactNumber { get; set; }
+        public DateOnly? BirthDate { get; set; }
+        public string Status { get; set; } = "Active";
+        public long? SelectedPositionId { get; set; }
+    }
+}
+
+
+
+
+

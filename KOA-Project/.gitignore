@@ -1,0 +1,14 @@
+## Ignore Visual Studio & .NET temporary files
+bin/
+obj/
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+## Secrets & Credentials Security
+client_secret*.json
+*.pem
+*.pfx
+appsettings.Secrets.json
+appsettings.Development.json
